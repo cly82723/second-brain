@@ -1,8 +1,9 @@
-﻿# Teachers' Second Brain: link
+# Teachers' Second Brain
 
 **https://cly82723.github.io/second-brain/**
 
-This page shows the Teachers' Second Brain app (Google Apps Script) full-screen, without Google's banner.
-It holds no code or data. The app's code is in a separate private repo.
+A private logbook, timetable and to-do list for teachers. This repo is only the published website:
+it contains code, never notes. Notes live in a private repo and are reached with a personal GitHub
+access key that each device is given once.
 
-First time? Tap **Open full app** once to sign in and allow access. After that, this link works.
+Source and tests: the private repo `cly82723/teachers-second-brain` (folder `web/`).
