@@ -1,9 +1,9 @@
 // The counted cycle days must match the numbers printed on the paper calendar.
 const test = require("node:test");
 const assert = require("node:assert");
-const { loadWeb } = require("./load-web");
+const { loadServer } = require("./fake-gas");
 
-const s = loadWeb();
+const s = loadServer();
 const school = s.ctx.buildSchool_("kings-college-2026");
 const L = s.ctx.logic_();
 

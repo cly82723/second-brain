@@ -1,4 +1,4 @@
-/* Checks everything the page saves before it reaches the notebook. Anything wrong throws a UserError_
+/* Checks everything the page sends before it reaches the Sheet. Anything wrong throws a UserError_
    with a message a teacher can act on. */
 
 var LIMITS = {
@@ -7,6 +7,7 @@ var LIMITS = {
 var CLASS_COLOURS = ["sage", "sky", "apricot", "lilac", "rose", "butter", "teal", "clay"];
 var ID_PATTERN = /^[A-Za-z0-9_-]{2,48}$/;
 var PERIOD_ID_PATTERN = /^[A-Za-z0-9]{1,8}$/;
+var EMAIL_HOURS = [16, 17, 18, 19, 20, 21, 22, 23];
 
 function UserError_(message) { this.message = message; }
 
@@ -47,7 +48,7 @@ function cleanId_(value) {
 }
 
 function newId_() {
-  return crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+  return Utilities.getUuid().replace(/-/g, "").slice(0, 16);
 }
 
 function cleanPeriods_(periods) {

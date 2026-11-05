@@ -81,7 +81,7 @@ function renderSettings() {
         onclick: function () { App.setupDraft = null; render(); } }, "Undo"),
       el("button", { type: "button", class: "btn", onclick: function (e) { saveSetupDraft(e.currentTarget); } }, setup ? "Start using the app" : "Save")
     ])
-  ].concat(setup ? [importPanel()] : [exportPanel(), importPanel(), dataPanel()])));
+  ].concat(setup ? [importPanel()] : [emailPanel(), exportPanel(), importPanel(), dataPanel()])));
   return el("div", { class: "page" }, parts);
 }
 
@@ -108,7 +108,7 @@ function setupHead(progress) {
   return el("header", { class: "setup-head" }, [
     el("div", { class: "eyebrow" }, "Welcome"),
     el("h1", {}, "Set up your notebook"),
-    el("p", {}, "Three short steps. Everything you add is saved in your private GitHub repo, and only you can see it."),
+    el("p", {}, "Three short steps. Everything you add is saved in a Google Sheet in your Drive, and only you can see it."),
     el("div", { class: "progress", "aria-label": "Setup progress" }, track)
   ]);
 }
@@ -225,6 +225,31 @@ function addMinutes(time, mins) {
   return pad(Math.floor(total / 60)) + ":" + pad(total % 60);
 }
 
+// ---------- email ----------
+function emailPanel() {
+  var email = App.data.settings.email;
+  var on = el("input", { type: "checkbox", checked: email.on });
+  var hour = el("select", { class: "select", style: "max-width:140px", "aria-label": "Send at" }, App.data.emailHours.map(function (h) {
+    return el("option", { value: String(h) }, (h > 12 ? h - 12 : h) + " pm");
+  }));
+  hour.value = String(email.hour);
+  var save = el("button", { type: "button", class: "btn btn-ink btn-sm" }, "Save");
+  save.addEventListener("click", function () {
+    busy(save, api("saveEmail", { on: on.checked, hour: Number(hour.value) })).then(function (res) {
+      setData(Object.assign({}, App.data, { settings: Object.assign({}, App.data.settings, { email: res.email }) }));
+      toast(res.email.on ? "Evening email on." : "Evening email off.");
+    }, fail);
+  });
+  var test = el("button", { type: "button", class: "btn btn-sm" }, "Send me a test");
+  test.addEventListener("click", function () {
+    busy(test, api("sendTestEmail")).then(function (res) { toast("Sent to " + res.to + "."); }, fail);
+  });
+  return panel("Evening email", null, [
+    el("p", { class: "hint", style: "margin-top:0" }, "The evening before each school day: tomorrow's lessons and plans, what to remind students, homework to collect, events and to-dos due, and anything left from today. Nothing is sent when tomorrow has nothing on."),
+    el("div", { class: "row" }, [el("label", { class: "check" }, [on, "Send it at"]), hour, save, test])
+  ]);
+}
+
 // ---------- export ----------
 function exportPanel() {
   var today = todayStr();
@@ -237,7 +262,7 @@ function exportPanel() {
   make.addEventListener("click", function () {
     var ids = boxes.filter(function (b) { return b.box.checked; }).map(function (b) { return b.id; });
     result.replaceChildren(el("span", { class: "hint" }, "Making your file… this can take a few seconds."));
-    busy(make, api("exportExcel", { from: from.value, to: to.value, classIds: ids })).then(function (res) {
+    busy(make, exportExcel(App.data, { from: from.value, to: to.value, classIds: ids })).then(function (res) {
       var link = el("a", { class: "btn btn-ink", href: res.url, download: res.filename }, "Download .xlsx");
       result.replaceChildren(link, el("span", { class: "hint" }, res.lessons + " lessons in the file."));
       link.click(); // start the download straight away; the button stays in case it was blocked
@@ -290,21 +315,32 @@ function importText(text) {
   }, fail);
 }
 
-// ---------- data ----------
+// ---------- data & this device ----------
 function dataPanel() {
-  var disconnect = el("button", { type: "button", class: "btn btn-sm btn-danger", onclick: function () {
-    if (!window.confirm("Disconnect this device? Your notes stay safe on GitHub; you'd paste your access key again to reconnect.")) return;
-    Backend.disconnect();
+  var holder = el("div", { class: "row" });
+  var open = el("button", { type: "button", class: "btn btn-sm" }, "Find my Google Sheet");
+  open.addEventListener("click", function () {
+    busy(open, api("getDataSheetUrl")).then(function (res) {
+      open.replaceWith(el("a", { class: "btn btn-sm", href: res.url, target: "_blank", rel: "noopener" }, "Open my Google Sheet ↗"));
+    }, fail);
+  });
+  var copy = el("button", { type: "button", class: "btn btn-sm", onclick: function () {
+    var link = Backend.personalLink();
+    var done = function () { toast("Personal link copied. Open it once on your other device."); };
+    if (navigator.clipboard) navigator.clipboard.writeText(link).then(done, function () { window.prompt("Copy your personal link:", link); });
+    else window.prompt("Copy your personal link:", link);
+  } }, "Copy my personal link");
+  var forget = el("button", { type: "button", class: "btn btn-sm btn-danger", onclick: function () {
+    if (!window.confirm("Forget this device? Your notes stay safe in your Google Sheet; open your personal link again to come back.")) return;
+    Backend.forget();
     App.data = null;
-    showConnect("This device is disconnected. Your notes are still on GitHub.");
-  } }, "Disconnect this device");
-  return panel("Your data", "GitHub", [
-    el("p", { class: "hint", style: "margin-top:0" }, "Everything is saved as one file, notebook.json, in your private repo. Every save is a commit, so GitHub's history is also your backup. Please make changes here in the app rather than on GitHub."),
-    el("div", { class: "row" }, [
-      el("a", { class: "btn btn-sm", href: App.data.notebookUrl, target: "_blank", rel: "noopener" }, "Open notebook.json on GitHub ↗"),
-      el("a", { class: "btn btn-sm", href: App.data.notebookUrl.replace("/blob/", "/commits/"), target: "_blank", rel: "noopener" }, "Save history ↗"),
-      disconnect
-    ])
+    showLocked("This device was forgotten. Your notes are still safe.");
+  } }, "Forget this device");
+  holder.append(open, copy, forget);
+  return panel("Your data", null, [
+    el("p", { class: "hint", style: "margin-top:0" }, "Your notes are saved in a Google Sheet in your Drive" + (App.data.email ? " (" + App.data.email + ")" : "") +
+      ". Use your personal link to open the app on another device: keep it private, as anyone with it can open your notebook."),
+    holder
   ]);
 }
 

@@ -1,5 +1,5 @@
 /* School calendars built into the app. A teacher picks one in Settings.
-   To add a school: copy the King's College block, change the dates, add it to SCHOOL_SPECS, publish.
+   To add a school: copy the King's College block, change the dates, add it to SCHOOL_SPECS, redeploy.
 
    Cycle days are counted, not typed: every weekday from cycleFrom to cycleTo gets the next cycle
    number, except the dates in noCycle (holidays and whole-school days without lessons).

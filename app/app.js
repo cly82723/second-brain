@@ -1,6 +1,6 @@
-/* Core of the page: state, calls to the notebook (core/backend.js), routing, and small helpers
+/* Core of the page: state, calls to the notebook web app (core/remote.js), routing, and small helpers
    shared by every view. views.js draws the pages, editors.js the side panels, settings.js setup and
-   settings, connect.js the "connect to GitHub" screen.
+   settings, connect.js the locked screen.
    Everything typed by a teacher is put on screen with textContent (via el), never as HTML. */
 "use strict";
 
@@ -65,16 +65,15 @@ function todayStr() { var d = new Date(); return d.getFullYear() + "-" + pad(d.g
 function nowMinutes() { var d = new Date(); return d.getHours() * 60 + d.getMinutes(); }
 
 // ---------- notebook ----------
-// Resolves with the data, or rejects with a readable message. If GitHub stops accepting the
-// access key (expired or deleted), the device is disconnected and asked to connect again.
+// Resolves with the data, or rejects with a readable message. If the web app says the secret code
+// is wrong (for example a new personal link was made), the device shows the locked screen.
 function api(name) {
   var args = Array.prototype.slice.call(arguments, 1);
   return Backend.call(name, args).catch(function (e) {
-    if (e.auth) {
-      Backend.disconnect();
+    if (e.locked) {
       closeLayer(true);
       App.data = null;
-      showConnect(e.message);
+      showLocked(e.message);
     }
     throw e;
   });
@@ -179,7 +178,7 @@ function renderNav() {
   });
   // During first-time setup there is nowhere else to go, so the phone tab bar stays out of the way.
   document.getElementById("nav-tabs").hidden = setup;
-  document.getElementById("who").textContent = "Saved to your private GitHub repo";
+  document.getElementById("who").textContent = "Saved to your Google Sheet";
 }
 
 // ---------- motion ----------
@@ -372,15 +371,13 @@ function boot(result) {
 
 function loadNotebook() {
   document.getElementById("main").replaceChildren(el("div", { class: "loading" }, "Opening your notebook…"));
-  api("getAll").then(boot, function (e) { if (!e.auth) showLoadError(e.message); });
+  api("getAll").then(boot, function (e) { if (!e.locked) showLoadError(e.message); });
 }
 
-// The local preview (tools/preview.js) supplies a notebook in memory; otherwise this device
-// needs a GitHub access key, asked for once.
+// No sign-in: opening the personal link once is enough. Without the code, show the locked screen.
 function start() {
-  if (window.TSB_PREVIEW) { Backend.useMemory(window.TSB_PREVIEW); loadNotebook(); return; }
-  if (!Backend.hasToken()) { showConnect(); return; }
-  Backend.useStoredToken();
+  Backend.takeKeyFromLink();
+  if (!Backend.hasKey()) { showLocked(); return; }
   loadNotebook();
 }
 
