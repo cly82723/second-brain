@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Teachers' Second Brain</title>
+  <meta name="description" content="A logbook, timetable and to-do list for teachers.">
+  <meta name="theme-color" content="#f6f1e7">
+  <style>
+    :root { --paper: #f6f1e7; --sheet: #fffdf8; --ink: #1f2a44; --muted: #776c5c; --line: #e7ddcc; --bar: 44px; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); font: 14px/1.4 "Segoe UI", system-ui, -apple-system, sans-serif; }
+    body { display: flex; flex-direction: column; height: 100dvh; }
+    .bar { flex: none; height: var(--bar); display: flex; align-items: center; gap: 10px; padding: 0 12px; border-bottom: 1px solid var(--line); background: var(--paper); }
+    .mark { width: 22px; height: 22px; border-radius: 6px; background: var(--ink); position: relative; flex: none; }
+    .mark::before, .mark::after { content: ""; position: absolute; left: 6px; right: 6px; height: 2px; border-radius: 2px; background: var(--paper); }
+    .mark::before { top: 7px; } .mark::after { top: 12px; right: 10px; }
+    .name { font: 600 15px Georgia, "Times New Roman", serif; white-space: nowrap; }
+    .bar a { margin-left: auto; color: var(--ink); font-weight: 600; text-decoration: none; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--sheet); white-space: nowrap; }
+    .bar a:hover { border-color: #c9bda9; }
+    .bar a:focus-visible, .tip button:focus-visible { outline: 2px solid #3b5bdb; outline-offset: 2px; }
+    .tip { flex: none; display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; background: #fbeedb; color: #6d4a1c; border-bottom: 1px solid #efd9b8; }
+    .tip p { margin: 0; flex: 1; }
+    .tip button { flex: none; border: 0; background: none; color: inherit; font: inherit; font-weight: 600; cursor: pointer; padding: 2px 4px; }
+    iframe { flex: 1; width: 100%; border: 0; display: block; background: var(--paper); }
+    @media (max-width: 380px) { .name { font-size: 14px; } .bar a { padding: 5px 8px; } }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <span class="mark" aria-hidden="true"></span>
+    <span class="name">Teachers' Second Brain</span>
+    <a id="full" href="https://script.google.com/macros/s/AKfycbyOpb6O2X9wU5MEedly7Mq7S-oEIigUuCg9PCZ5iE8Sl51TdNaeOWOkvxic7QYcafr8fg/exec" target="_top">Open full app ↗</a>
+  </header>
+  <div class="tip" id="tip" role="note" hidden>
+    <p><b>First time here, or the app below stays blank?</b> Tap <b>Open full app</b> once to sign in with Google and allow access (on the "unverified app" screen tap <b>Advanced → Go to Teachers' Second Brain → Allow</b>). After that, this page works.</p>
+    <button type="button" id="hide-tip" aria-label="Hide this tip">Got it</button>
+  </div>
+  <iframe id="app" title="Teachers' Second Brain"
+    src="https://script.google.com/macros/s/AKfycbyOpb6O2X9wU5MEedly7Mq7S-oEIigUuCg9PCZ5iE8Sl51TdNaeOWOkvxic7QYcafr8fg/exec"
+    allow="clipboard-write"></iframe>
+  <script>
+    // The tip shows until it's dismissed once on this device. Storage can be blocked; then it simply shows.
+    (function () {
+      var KEY = "tsb-tip-hidden";
+      var tip = document.getElementById("tip");
+      var hidden = false;
+      try { hidden = localStorage.getItem(KEY) === "1"; } catch (e) { hidden = false; }
+      tip.hidden = hidden;
+      document.getElementById("hide-tip").addEventListener("click", function () {
+        tip.hidden = true;
+        try { localStorage.setItem(KEY, "1"); } catch (e) { /* storage blocked: the tip returns next visit */ }
+      });
+    })();
+  </script>
+</body>
+</html>
