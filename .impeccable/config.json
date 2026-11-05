@@ -1,0 +1,23 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          "docs/index.html"
+        ],
+        "createdAt": "2026-11-05T15:36:46.521Z",
+        "reason": "user chose the 'calm planner' direction (warm off-white paper) on 5 Nov 2026; launch page matches the app"
+      },
+      {
+        "rule": "overused-font",
+        "value": "fraunces",
+        "createdAt": "2026-11-05T15:36:46.584Z",
+        "reason": "Claude's choice: launch page reuses the app's existing heading face (Fraunces) so the two match; not user-confirmed"
+      }
+    ]
+  }
+}
