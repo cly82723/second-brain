@@ -6,7 +6,7 @@
    as it is; error.locked means the code is missing or wrong. */
 
 // Set to the web app's address after deploying (Deploy → Manage deployments → Web app URL).
-var WEB_APP_URL = "PASTE_THE_WEB_APP_URL_HERE";
+var WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwcyGKB_ES6QXFVbxE4fKJHIRjulFrq2zLaEWCTJI1kieJRxIkcllniUL5l3hNuewaXmQ/exec";
 var KEY_STORE = "tsb-access-key";
 var KEY_IN_LINK = /(?:^#|&)k=([A-Za-z0-9_-]{32,128})/;
 
