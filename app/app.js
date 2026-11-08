@@ -139,6 +139,11 @@ function route() {
   var param = parts[1] ? decodeURIComponent(parts[1]) : "";
   var changed = view !== App.view;
   App.arriving = changed || param !== App.param; // a new page glides in; redraws in place don't
+  // Paging to a later or earlier day/week arrives from that side (an empty param means today).
+  var before = App.param && L.isDate(App.param) ? App.param : todayStr();
+  var after = param && L.isDate(param) ? param : todayStr();
+  App.navDir = !changed && (view === "today" || view === "week") && param !== "year" && App.param !== "year" && after !== before
+    ? (after > before ? "next" : "prev") : "";
   App.view = view;
   App.param = param;
   render();
@@ -151,7 +156,11 @@ function render() {
   var main = document.getElementById("main");
   var views = { today: renderToday, week: renderWeek, classes: renderClasses, todos: renderTodos, settings: renderSettings };
   var page = views[App.view]();
-  if (App.arriving) { page.classList.add("page-enter"); App.arriving = false; }
+  if (App.arriving) {
+    page.classList.add("page-enter");
+    if (App.navDir) page.setAttribute("data-dir", App.navDir);
+    App.arriving = false;
+  }
   main.replaceChildren(page);
   var setup = !App.data.settings.setupDone;
   document.getElementById("new-fab").hidden = setup;

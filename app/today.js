@@ -36,10 +36,15 @@ function renderToday() {
     ["lessons", "Day"], ["side", "Lists" + (sideCount ? " (" + sideCount + ")" : "")]
   ].map(function (p) {
     return el("button", { type: "button", role: "tab", "aria-selected": App.todayPane === p[0] ? "true" : "false",
+      // Instant: the thumb slides and the panes swap on the same frame, no redraw, no waiting.
       onclick: function (e) {
-        e.currentTarget.parentNode.style.setProperty("--i", p[0] === "side" ? 1 : 0);
+        var bar = e.currentTarget.parentNode;
         App.todayPane = p[0];
-        setTimeout(render, Motion.reduced ? 0 : 140);
+        bar.style.setProperty("--i", p[0] === "side" ? 1 : 0);
+        Array.prototype.forEach.call(bar.children, function (b) { b.setAttribute("aria-selected", b === e.currentTarget ? "true" : "false"); });
+        Array.prototype.forEach.call(document.querySelectorAll(".today-grid > [data-pane]"), function (pane) {
+          pane.setAttribute("data-hidden-mobile", pane.getAttribute("data-pane") === (p[0] === "side" ? "side" : "lessons") ? "false" : "true");
+        });
       } }, p[1]);
   }));
 

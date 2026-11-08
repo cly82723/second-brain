@@ -51,6 +51,11 @@ function openMarkEditor(mark, defaults) {
           onchange: function (e) { students[s.no] = { s: st.s, m: e.target.checked }; drawList(); } }), "Marked"])
       ]);
     });
+    // Redrawing must not jump: keep where the list was scrolled to and which button had focus.
+    var oldList = listHolder.querySelector(".hand-in-list");
+    var keepScroll = oldList ? oldList.scrollTop : 0;
+    var focused = document.activeElement && listHolder.contains(document.activeElement) ? document.activeElement : null;
+    var focusKey = focused ? [focused.closest(".hand-in") ? Array.prototype.indexOf.call(oldList.children, focused.closest(".hand-in")) : -1, focused.className] : null;
     listHolder.replaceChildren(el("div", { class: "field" }, [
       el("div", { class: "row", style: "justify-content:space-between" }, [
         el("span", { class: "label" }, "Hand-ins · " + (counts.S + counts.L) + " in, " + counts.M + " missing, " + counts.A + " absent" + (counts[""] ? ", " + counts[""] + " not recorded" : "")),
@@ -68,6 +73,13 @@ function openMarkEditor(mark, defaults) {
       el("p", { class: "hint", style: "margin:0" }, "Select all marks everyone not yet recorded as Submitted; then change the few who didn't hand in. S = Submitted, L = Late, A = Absent, M = Missing."),
       el("ul", { class: "list hand-in-list" }, rows)
     ]));
+    var newList = listHolder.querySelector(".hand-in-list");
+    newList.scrollTop = keepScroll;
+    if (focusKey && focusKey[0] >= 0 && newList.children[focusKey[0]]) {
+      var classes = focusKey[1].split(" ").filter(Boolean);
+      var again = newList.children[focusKey[0]].querySelector(classes.length ? "." + classes.join(".") : "input");
+      if (again) again.focus({ preventScroll: true });
+    }
   }
 
   function collect() {

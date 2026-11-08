@@ -81,7 +81,7 @@ function todoItem(t) {
   var today = todayStr();
   var cls = t.classId ? App.ctx.classById[t.classId] : null;
   return el("li", { class: "todo" + (t.done ? " is-done" : "") }, [
-    el("input", { type: "checkbox", checked: t.done, "aria-label": "Done: " + t.title, onchange: function (e) { toggleTodo(t, e.target.checked); } }),
+    el("input", { type: "checkbox", checked: t.done, "aria-label": "Done: " + t.title, onchange: function (e) { toggleTodo(t, e.target.checked, e.target.parentNode); } }),
     el("button", { type: "button", class: "todo-main", onclick: function () { openTodoEditor(t); } }, [
       el("div", { class: "todo-title" }, t.title),
       el("div", { class: "todo-meta" }, [dueText(t.due, today, t.time) || el("span", { class: "hint" }, "No date"), categoryChip(t.category),
@@ -90,11 +90,18 @@ function todoItem(t) {
   ]);
 }
 
-function toggleTodo(t, done) {
+// Ticking off keeps the row on screen, struck through, for a moment before the list redraws,
+// so the result of the tap is seen rather than the row simply vanishing.
+var TICK_LINGER_MS = 420;
+function toggleTodo(t, done, row) {
   var next = Object.assign({}, t, { done: done, doneAt: done ? todayStr() : "" });
-  setData(withList("todos", next, idOf));
-  api("saveTodo", next).then(function (res) {
-    setData(withList("todos", res.todo, idOf));
+  var linger = row && done && !Motion.reduced;
+  // Every redraw (ours and the save's reply) waits until the row has been seen leaving.
+  var settled = new Promise(function (resolve) { setTimeout(resolve, linger ? TICK_LINGER_MS : 0); });
+  if (linger) row.classList.add("is-done", "is-leaving");
+  settled.then(function () { setData(withList("todos", next, idOf)); });
+  Promise.all([api("saveTodo", next), settled]).then(function (out) {
+    setData(withList("todos", out[0].todo, idOf));
     if (done) toast("Ticked off: " + t.title);
   }, function (e) { setData(withList("todos", t, idOf)); fail(e); });
 }
@@ -127,7 +134,7 @@ function quickAddTodo(defaultDue) {
 
 function progressBar(p) {
   var pct = p.total ? Math.round(100 * p.marked / p.total) : 0;
-  return el("span", { class: "progress-bar", role: "img", "aria-label": p.marked + " of " + p.total + " marked" }, el("span", { style: "width:" + pct + "%" }));
+  return el("span", { class: "progress-bar", role: "img", "aria-label": p.marked + " of " + p.total + " marked" }, el("span", { style: "--p:" + (pct / 100) }));
 }
 
 function markRow(m) {
