@@ -49,7 +49,7 @@ function lessonCard(lesson, isNow) {
   }, [
     el("div", { class: "lesson-time" }, [el("b", {}, lesson.start), lesson.end]),
     el("div", { class: "lesson-name" }, [lesson.cls.name, el("span", { class: "lesson-len" }, lesson.periodText + " · " + lesson.lengthText)]),
-    el("div", { class: "lesson-side" }, [isNow ? el("span", { class: "chip chip-cycle" }, "Now") : null, statusPill(status)]),
+    el("div", { class: "lesson-side" }, [isNow ? el("span", { class: "chip chip-cycle" }, "Now") : null, status === "empty" ? null : statusPill(status)]),
     body.length ? el("div", { class: "lesson-body" }, body) : null
   ]);
 }
@@ -189,7 +189,7 @@ function renderClasses() {
 
   return el("div", { class: "page" }, [
     el("header", { class: "page-head" }, [
-      el("div", {}, [el("div", { class: "eyebrow" }, "Classes"), el("h1", {}, cls.name),
+      el("div", {}, [el("h1", {}, cls.name),
         el("div", { class: "sub" }, [entries.length + (entries.length === 1 ? " entry" : " entries") + " in the logbook",
           openFollowUps.length ? el("span", { class: "chip chip-follow" }, openFollowUps.length + " to follow up") : null])]),
       el("div", { class: "head-tools search" }, [icon("search"), search])
@@ -251,7 +251,7 @@ function recordItem(e, lesson, query) {
       el("span", {}, [info.cycleDay ? L.cycleName(App.ctx.school, info.cycleDay) : "", l ? " · " + l.periodText : ""].join("")),
       el("span", { style: "margin-top:6px" }, statusPill(status))
     ]),
-    empty ? el("div", { class: "record-fields" }, el("span", { class: "hint" }, "Nothing written yet. Tap to plan this lesson.")) :
+    empty ? el("div", { class: "record-fields" }, el("span", { class: "hint" }, "Nothing written yet. Open it to plan this lesson.")) :
       el("div", { class: "record-fields" }, [
         carried.length ? el("div", { class: "lesson-body" }, carried) : null,
         el("div", { class: "rec-pair" }, [block("Plan", e.plan), block("Covered", e.covered)]),

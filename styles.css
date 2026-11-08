@@ -11,8 +11,9 @@
   --fill-2: rgba(28, 37, 65, .08);
   --text: #1b1d22;
   --text-2: #4a4d57;
-  --muted: #7b7d86;
-  --faint: #a9abb2;
+  /* Secondary text must stay readable on a phone in a bright classroom: both pass 4.5:1 on paper and white. */
+  --muted: #5b5d66;
+  --faint: #6c6e77;
   --hair: rgba(20, 24, 35, .09);
   --hair-2: rgba(20, 24, 35, .15);
   --ink: #1c2541;
@@ -588,7 +589,8 @@ details.panel[open] > summary::before { transform: rotate(45deg); }
 .label-key { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); margin: -4px 0 16px; }
 .key-item { display: inline-flex; align-items: center; gap: 6px; }
 .key-swatch { width: 12px; height: 12px; border-radius: 4px; display: inline-block; flex: none; box-shadow: inset 0 0 0 1px var(--hair-2); }
-.lab-H { background: #e9e6df; } .lab-E { background: #fbd9bd; } .lab-U { background: #fcebdd; } .lab-A { background: #d6e5f5; } .lab-S { background: #e2f0dc; }
+/* Distinct enough to tell apart at a glance, still light enough for dark text on top. */
+.lab-H { background: #dcd7cb; } .lab-E { background: #f6c39b; } .lab-U { background: #fadcc2; } .lab-A { background: #c3d8f0; } .lab-S { background: #cfe6c4; }
 .lab-mine { background: var(--ink); }
 .chip-S { background: #e2f0dc; color: #355b2f; }
 
@@ -650,7 +652,7 @@ details.panel[open] > summary::before { transform: rotate(45deg); }
 .mini-tag { text-align: left; font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 7px; border: 0; background: var(--c-bg, var(--fill-2)); color: var(--c-ink, var(--text-2)); cursor: pointer; }
 .mini-tag.tag-mark { background: #fcebdd; color: #8a4417; }
 .mini-flags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
-.mini-flag { font-size: 10.5px; font-weight: 700; padding: 0 6px; border-radius: 99px; background: rgba(255,255,255,.7); }
+.mini-flag { font-size: 11.5px; font-weight: 700; padding: 0 6px; border-radius: 99px; background: rgba(255,255,255,.8); }
 .flag-follow { color: #6b3fa0; } .flag-collect { color: #2c4f72; } .flag-chase { color: var(--danger); }
 .week-list { display: flex; flex-direction: column; gap: 10px; }
 .day-pills { display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); gap: 6px; margin-bottom: 6px; }
@@ -669,13 +671,30 @@ details.panel[open] > summary::before { transform: rotate(45deg); }
 .ym-day { position: relative; aspect-ratio: 1 / 1; border: 0; border-radius: 7px; background: var(--sheet-2); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0; font-variant-numeric: tabular-nums; }
 .ym-day.is-weekend { background: transparent; color: var(--muted); }
 .ym-day.is-today { box-shadow: inset 0 0 0 2px var(--ink); }
-.ym-day.lab-H { background: #e9e6df; color: var(--muted); } .ym-day.lab-E { background: #fbd9bd; } .ym-day.lab-U { background: #fcebdd; } .ym-day.lab-A { background: #d6e5f5; } .ym-day.lab-S { background: #e2f0dc; }
+.ym-day.lab-H { background: #dcd7cb; } .ym-day.lab-E { background: #f6c39b; } .ym-day.lab-U { background: #fadcc2; } .ym-day.lab-A { background: #c3d8f0; } .ym-day.lab-S { background: #cfe6c4; }
+.ym-day .ym-cycle { color: var(--text-2); }
 .ym-num { font-size: 12.5px; font-weight: 600; line-height: 1; }
 .ym-cycle { font-size: 9.5px; color: var(--muted); line-height: 1; margin-top: 2px; }
 .ym-mine { position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--ink); }
 .ym-list { list-style: none; margin: 10px 0 0; padding: 10px 0 0; border-top: 1px solid var(--hair); display: grid; gap: 4px; font-size: 12.5px; color: var(--text-2); }
 .ym-list li { display: flex; gap: 6px; align-items: baseline; }
 .ym-list .key-swatch { transform: translateY(1px); }
+
+/* ---------- visibility & wayfinding ---------- */
+html { scrollbar-gutter: stable; }
+:focus-visible { outline-width: 2.5px; outline-offset: 2px; }
+.lesson-body .tagline b { font-size: 11.5px; }
+.chip-away { background: var(--warn-bg); color: var(--warn); font-weight: 650; }
+.day-title { min-width: 0; }
+.day-title h1 .short { display: none; }
+.cal-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-bottom: 16px; }
+.cal-bar .segmented, .cal-bar .label-key { margin: 0; }
+.label-key-fold summary { cursor: pointer; font-size: 13px; color: var(--text-2); font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+.label-key-fold .label-key { margin: 4px 0 8px; }
+.scripts-row { display: grid; grid-template-columns: repeat(2, minmax(0, 150px)); gap: 10px; }
+.scripts-count { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-2); }
+.scripts-count .input { width: 80px; flex: none; }
+.scripts-field { gap: 8px; margin-top: 6px; }
 
 /* ---------- motion refinements ---------- */
 /* Press feedback on everything pressable that didn't have it. */
@@ -706,9 +725,25 @@ details.panel[open] > summary::before { transform: rotate(45deg); }
 @media (max-width: 860px) {
   .ahead-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rec-pair { grid-template-columns: 1fr; }
-  .strip-row { grid-template-columns: 58px minmax(0, 1fr); }
-  .strip-time { padding: 7px 6px; font-size: 11px; overflow-wrap: anywhere; }
-  .now-line::before { left: 52px; }
+  .strip-row { grid-template-columns: 62px minmax(0, 1fr); min-height: 48px; }
+  .strip-time { padding: 7px 6px; font-size: 11.5px; overflow-wrap: normal; hyphens: auto; }
+  .now-line::before { left: 56px; }
+  /* Thumb-sized targets: 44px minimum for everything pressable. */
+  .btn, .btn-sm, .segmented button, .mobile-switch button, .cycle-jump .btn { min-height: 44px; }
+  .icon-btn { width: 44px; }
+  .strip-free, .strip-item, .strip-cont, .strip-todo { min-height: 46px; }
+  .day-pill { min-height: 52px; }
+  .hi-btn { width: 40px; height: 40px; }
+  .filter-chip { min-height: 40px; }
+  /* Day and week titles: short form, controls on the same line. */
+  .page-head-day { flex-wrap: nowrap; align-items: flex-start; gap: 10px; }
+  .page-head-day .day-title h1 { font-size: 26px; }
+  .day-title h1 .long { display: none; }
+  .day-title h1 .short { display: inline; }
+  .page-head-day .head-tools { flex: none; flex-wrap: nowrap; gap: 6px; }
+  .page-head-day .head-tools .btn-ink { padding: 0 12px; }
+  .tabbar a { font-size: 11.5px; }
+  .main { padding-bottom: calc(124px + env(safe-area-inset-bottom)); }
   .quick-add-row { grid-template-columns: 1fr 1fr; }
   .quick-add-row .btn { grid-column: 1 / -1; }
   .hand-in { grid-template-columns: 24px minmax(0, 1fr); }

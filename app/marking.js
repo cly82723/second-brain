@@ -26,10 +26,15 @@ function openMarkEditor(mark, defaults) {
   function drawList() {
     var list = roster();
     if (!cls.value || !list.length) {
-      listHolder.replaceChildren(
-        el("div", { class: "field" }, [el("span", { class: "label" }, "Scripts"), el("div", { class: "row" }, [scripts, el("span", {}, "handed in,"), marked, el("span", {}, "marked")])]),
-        cls.value ? el("p", { class: "hint", style: "margin-top:-8px" }, "Add a name list for this class in Settings → Name lists to tick students off one by one.") : null
-      );
+      // el() skips a missing hint; the DOM's replaceChildren would print it as the word "null".
+      listHolder.replaceChildren(el("div", { class: "field scripts-field" }, [
+        el("span", { class: "label" }, "Scripts"),
+        el("div", { class: "scripts-row" }, [
+          el("label", { class: "scripts-count" }, [scripts, el("span", {}, "handed in")]),
+          el("label", { class: "scripts-count" }, [marked, el("span", {}, "marked")])
+        ]),
+        cls.value ? el("p", { class: "hint", style: "margin:0" }, "Add a name list for this class in Settings → Name lists to tick students off one by one.") : null
+      ]));
       return;
     }
     var counts = { S: 0, L: 0, A: 0, M: 0, "": 0, marked: 0 };

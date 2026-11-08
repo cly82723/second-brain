@@ -14,20 +14,26 @@ function renderToday() {
   var current = isToday ? lessons.filter(function (l) { return !l.replacedBy && L.minutes(l.start) <= nowMin && nowMin < L.minutes(l.end); })[0] : null;
   var next = isToday ? lessons.filter(function (l) { return !l.replacedBy && L.minutes(l.start) > nowMin; })[0] : null;
   var groups = L.groupTodos(App.ctx, today);
-  var sideCount = groups.overdue.length + groups.today.length;
+  // The Lists tab counts what needs attention, so nothing hides behind it unnoticed.
+  var sideCount = groups.overdue.length + groups.today.length + L.undatedCount(L.undated(App.ctx));
+  var shortTitle = L.shortDate(date);
 
-  var head = el("header", { class: "page-head" }, [
-    el("div", {}, [
-      el("div", { class: "eyebrow" }, isToday ? "Today" : (date < today ? "Looking back" : "Looking ahead")),
-      el("h1", {}, L.longDate(date)),
-      el("div", { class: "sub" }, [cycleChip(info)].concat(labelChips(info)).concat([
+  var head = el("header", { class: "page-head page-head-day" }, [
+    el("div", { class: "day-title" }, [
+      // Full date on a computer, short on a phone, so the day controls fit beside it.
+      el("h1", {}, [el("span", { class: "long" }, L.longDate(date)), el("span", { class: "short", "aria-hidden": "true" }, shortTitle)]),
+      el("div", { class: "sub" }, [
+        isToday ? null : el("span", { class: "chip chip-away" }, date < today ? "Past day" : "Upcoming day"),
+        cycleChip(info)
+      ].concat(labelChips(info)).concat([
         current ? el("span", {}, "Now: " + current.cls.name + " until " + current.end) :
           next ? el("span", {}, "Next: " + next.cls.name + " at " + next.start) : null
       ]))
     ]),
-    el("div", { class: "head-tools" }, [
+    el("div", { class: "head-tools day-nav" }, [
       el("button", { type: "button", class: "btn icon-btn", "aria-label": "Previous day", onclick: function () { go("today", L.addDays(date, -1)); } }, icon("left")),
-      isToday ? null : el("button", { type: "button", class: "btn", onclick: function () { go("today"); } }, "Today"),
+      // Away from today, the way back is the most obvious control on the page.
+      isToday ? null : el("button", { type: "button", class: "btn btn-ink", onclick: function () { go("today"); } }, "Back to today"),
       el("button", { type: "button", class: "btn icon-btn", "aria-label": "Next day", onclick: function () { go("today", L.addDays(date, 1)); } }, icon("right"))
     ])
   ]);
@@ -52,14 +58,33 @@ function renderToday() {
     ? [weekendPanel(date), el("div", { class: "section-title" }, shown !== date ? "Preview: " + L.longDate(shown) : "Next school day"), dayView(shown, false)]
     : [dayView(date, isToday)];
 
-  return el("div", { class: "page" }, [
+  var page = el("div", { class: "page" }, [
     head, switcher,
     el("div", { class: "today-grid" }, [
       el("div", { "data-pane": "lessons", "data-hidden-mobile": App.todayPane !== "lessons" ? "true" : "false" }, main),
-      el("div", { "data-pane": "side", "data-hidden-mobile": App.todayPane !== "side" ? "true" : "false" }, todaySide(shown, groups))
+      el("div", { "data-pane": "side", "data-hidden-mobile": App.todayPane !== "side" ? "true" : "false" }, todaySide(date, shown, groups))
     ]),
     weekAhead(weekend ? L.addDays(shown, -1) : date)
   ]);
+  swipeDays(page, date);
+  return page;
+}
+
+// On a touch screen, a sideways swipe moves a day, so the thumb doesn't have to reach the top corner.
+var SWIPE_MIN_PX = 70;
+function swipeDays(page, date) {
+  var start = null;
+  page.addEventListener("touchstart", function (e) {
+    if (e.touches.length !== 1 || e.target.closest("input, textarea, select, .tt-wrap, .day-pills")) { start = null; return; }
+    start = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, { passive: true });
+  page.addEventListener("touchend", function (e) {
+    if (!start) return;
+    var dx = e.changedTouches[0].clientX - start.x, dy = e.changedTouches[0].clientY - start.y;
+    start = null;
+    if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+    go("today", L.addDays(date, dx < 0 ? 1 : -1));
+  }, { passive: true });
 }
 
 // All-day things on top, then the strip.
@@ -106,7 +131,7 @@ function dayStrip(date, isToday) {
   var later = timed.filter(function (ev) { return ev.start >= last; });
   var out = [];
   if (earlier.length) out.push(el("div", { class: "strip-edge" }, [el("span", { class: "hint" }, "Earlier")].concat(earlier.map(edgeChip))));
-  rows.forEach(function (r) {
+  var filled = rows.map(function (r) {
     var starts = lessons.filter(function (l) { return l.periods[0].id === r.period; });
     var continues = lessons.filter(function (l) { return l.periods.slice(1).some(function (p) { return p.id === r.period; }); });
     var items = timed.filter(function (ev) { return inRow(ev.start, r); });
@@ -117,12 +142,29 @@ function dayStrip(date, isToday) {
       }))
       .concat(items.map(stripItem))
       .concat(dueTodos.map(function (t) { return el("button", { type: "button", class: "strip-todo", onclick: function () { openTodoEditor(t); } }, [el("span", { class: "chip" }, "To-do " + t.time), " ", t.title]); }));
-    var empty = !content.length;
+    return { r: r, content: content };
+  });
+  // Runs of empty periods (or empty after-school rows) become one row, so a free morning is one line
+  // instead of a column of "Free".
+  var merged = [];
+  filled.forEach(function (f) {
+    var prev = merged[merged.length - 1];
+    var mergeable = !f.content.length && f.r.kind !== "break";
+    if (mergeable && prev && !prev.content.length && prev.r.kind === f.r.kind) {
+      prev.r = Object.assign({}, prev.r, { end: f.r.end, lastLabel: f.r.label });
+      return;
+    }
+    merged.push({ r: Object.assign({}, f.r), content: f.content });
+  });
+  merged.forEach(function (f) {
+    var r = f.r;
+    var empty = !f.content.length;
+    var span = r.lastLabel && r.kind === "period" ? r.label + "–" + r.lastLabel : r.label;
     var row = el("div", { class: "strip-row kind-" + r.kind + (empty ? " is-empty" : "") }, [
-      el("div", { class: "strip-time" }, [el("b", {}, r.start), el("span", {}, r.label)]),
+      el("div", { class: "strip-time" }, [el("b", {}, r.start), el("span", {}, span)]),
       el("div", { class: "strip-body" }, empty ? el("button", { type: "button", class: "strip-free", "aria-label": "Add an item " + r.start + "–" + r.end,
         onclick: function () { openEventEditor(null, { date: date, start: r.start, end: r.end }); } },
-        r.kind === "period" ? "Free" : r.kind === "break" ? r.label : "+") : content)
+        r.kind === "period" ? "Free until " + r.end : r.kind === "break" ? r.label : "+ Add") : f.content)
     ]);
     if (isToday && nowMin >= L.minutes(r.start) && nowMin < L.minutes(r.end)) {
       var pct = 100 * (nowMin - L.minutes(r.start)) / (L.minutes(r.end) - L.minutes(r.start));
@@ -202,16 +244,21 @@ function weekAhead(fromDate) {
   ]);
 }
 
-function todaySide(date, groups) {
+// viewed: the day on screen (to-dos and quick add follow it); lessonDay: the school day whose
+// homework is shown (the next school day when viewing a weekend).
+function todaySide(viewed, lessonDay, groups) {
   var today = todayStr();
-  var due = groups.overdue.concat(groups.today);
+  var onToday = viewed === today;
+  var date = lessonDay;
+  var dayName = onToday ? "today" : L.shortDate(viewed);
+  var due = onToday ? groups.overdue.concat(groups.today) : L.todosDueOn(App.ctx, viewed);
   var homework = L.homeworkDueOn(App.ctx, date);
   var marks = L.marksByDue(App.ctx);
   var stale = L.notUpdated(App.ctx, App.data.settings.startDate, today, nowMinutes()).filter(function (l) { return l.date < today || date === today; });
   var out = [needsDatePanel()];
-  out.push(panel("To-dos", due.length ? due.length + " due" : "", [
-    due.length ? el("ul", { class: "list" }, due.map(todoItem)) : el("p", { class: "empty" }, "Nothing due today."),
-    quickAddTodo(today),
+  out.push(panel(onToday ? "To-dos" : "To-dos · " + L.shortDate(viewed), due.length ? due.length + " due" : "", [
+    due.length ? el("ul", { class: "list" }, due.map(todoItem)) : el("p", { class: "empty" }, "Nothing due " + dayName + "."),
+    quickAddTodo(viewed),
     groups.week.length ? el("button", { type: "button", class: "btn btn-quiet btn-sm", style: "margin-top:8px", onclick: function () { go("todos"); } },
       groups.week.length + " more this week →") : null
   ]));

@@ -71,7 +71,7 @@ function renderSettings() {
   var parts = [];
   var progress = setupProgress(d);
   if (setup) parts.push(setupHead(progress));
-  else parts.push(el("header", { class: "page-head" }, el("div", {}, [el("div", { class: "eyebrow" }, "Settings"), el("h1", {}, "Your setup")])));
+  else parts.push(el("header", { class: "page-head" }, el("div", {}, [el("h1", {}, "Your setup")])));
   parts.push(el("div", { class: "settings" }, [
     schoolPanel(d, progress), classesPanel(d, progress), timetablePanel(d, progress), periodsPanel(d),
     el("div", { class: "save-bar", id: "save-bar", hidden: !setup && !draftIsDirty() }, [
@@ -106,7 +106,7 @@ function setupHead(progress) {
     track.push(el("span", { class: "p-step" + (s[1] ? " is-done" : "") }, [stepBadge(i + 1, s[1]), el("span", { class: "p-label" }, s[0])]));
   });
   return el("header", { class: "setup-head" }, [
-    el("div", { class: "eyebrow" }, "Welcome"),
+    
     el("h1", {}, "Set up your notebook"),
     el("p", {}, "Three short steps. Everything you add is saved in a Google Sheet in your Drive, and only you can see it."),
     el("div", { class: "progress", "aria-label": "Setup progress" }, track)

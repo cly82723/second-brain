@@ -14,31 +14,27 @@ function renderWeek() {
   var friday = L.addDays(monday, 4);
   var phone = Motion.phone();
 
-  var head = el("header", { class: "page-head" }, [
-    el("div", {}, [
-      el("div", { class: "eyebrow" }, "Calendar"),
-      el("h1", {}, "Week of " + L.dayMonth(monday)),
-      el("div", { class: "sub" }, L.dayMonth(monday) + " – " + L.dayMonth(friday) + " " + friday.slice(0, 4))
+  var thisWeek = monday === L.mondayOf(today);
+  var head = el("header", { class: "page-head page-head-day" }, [
+    el("div", { class: "day-title" }, [
+      el("h1", {}, [el("span", { class: "long" }, "Week of " + L.dayMonth(monday)), el("span", { class: "short", "aria-hidden": "true" }, L.dayMonth(monday) + "–" + L.dayMonth(friday))]),
+      el("div", { class: "sub" }, [thisWeek ? null : el("span", { class: "chip chip-away" }, monday < today ? "Past week" : "Upcoming week"),
+        el("span", {}, L.dayMonth(monday) + " – " + L.dayMonth(friday) + " " + friday.slice(0, 4))])
     ]),
-    el("div", { class: "head-tools" }, [
+    el("div", { class: "head-tools day-nav" }, [
       el("button", { type: "button", class: "btn icon-btn", "aria-label": "Previous week", onclick: function () { go("week", L.addDays(monday, -7)); } }, icon("left")),
-      el("button", { type: "button", class: "btn", onclick: function () { go("week"); } }, "This week"),
+      thisWeek ? null : el("button", { type: "button", class: "btn btn-ink", onclick: function () { go("week"); } }, "This week"),
       el("button", { type: "button", class: "btn icon-btn", "aria-label": "Next week", onclick: function () { go("week", L.addDays(monday, 7)); } }, icon("right"))
     ])
   ]);
 
-  var body;
-  if (phone) {
-    var mode = App.calPhone || "day";
-    var dayDate = App.calDay && App.calDay >= monday && App.calDay <= L.addDays(monday, 6) ? App.calDay : (today >= monday && today <= L.addDays(monday, 6) ? today : monday);
-    body = [
-      segmented([["day", "Day"], ["week", "Week"]], mode, function (v) { App.calPhone = v; render(); }),
-      mode === "day" ? phoneDay(dayDate, days) : el("div", { class: "week-list" }, days.map(function (d) { return dayListCard(d, today); }))
-    ];
-  } else {
-    body = [weekGrid(days, today)];
-  }
-  return el("div", { class: "page page-wide" }, [head, calendarSwitch("week"), labelKey()].concat(body).concat([cycleJump(today)]));
+  // One switcher for the whole Calendar: Day, Week, Year. A phone opens on Day, a computer on Week.
+  var mode = App.calMode || (phone ? "day" : "week");
+  var dayDate = App.calDay && App.calDay >= monday && App.calDay <= L.addDays(monday, 6) ? App.calDay : (today >= monday && today <= L.addDays(monday, 6) ? today : monday);
+  var body = mode === "day" ? phoneDay(dayDate, days)
+    : phone ? [el("div", { class: "week-list" }, days.map(function (d) { return dayListCard(d, today); }))]
+      : [weekGrid(days, today)];
+  return el("div", { class: "page page-wide" }, [head, el("div", { class: "cal-bar" }, [calendarSwitch(mode), labelKey(phone)])].concat(body).concat([cycleJump(today)]));
 }
 
 function segmented(options, value, onChange) {
@@ -48,13 +44,20 @@ function segmented(options, value, onChange) {
 }
 
 function calendarSwitch(current) {
-  return segmented([["week", "My week"], ["year", "School year"]], current, function (v) { go("week", v === "year" ? "year" : ""); });
+  return segmented([["day", "Day"], ["week", "Week"], ["year", "School year"]], current, function (v) {
+    if (v === "year") { go("week", "year"); return; }
+    App.calMode = v;
+    if (App.param === "year") go("week"); else render();
+  });
 }
 
-function labelKey() {
-  return el("div", { class: "label-key", "aria-label": "Colour key" }, LABEL_KEY.map(function (k) {
+// On a phone the key folds away behind one line; on a computer it's always shown.
+function labelKey(folded) {
+  var items = LABEL_KEY.map(function (k) {
     return el("span", { class: "key-item" }, [el("span", { class: "key-swatch lab-" + k[0] }), k[1]]);
-  }).concat([el("span", { class: "key-item" }, [el("span", { class: "key-swatch lab-mine" }), "Your items"])]));
+  }).concat([el("span", { class: "key-item" }, [el("span", { class: "key-swatch lab-mine" }), "Your items"])]);
+  if (!folded) return el("div", { class: "label-key", role: "group", "aria-label": "Colour key" }, items);
+  return el("details", { class: "label-key-fold" }, [el("summary", {}, "Colour key"), el("div", { class: "label-key" }, items)]);
 }
 
 function cycleJump(today) {
@@ -168,7 +171,7 @@ function dayListCard(d, today) {
     .map(function (x) { return x.node; });
   var extras = dayExtras(info.date, d.lessons).filter(function (n) { return !n.classList.contains("event"); });
   return el("section", { class: "day-col" + (info.date === today ? " is-today" : "") + (info.holiday ? " is-holiday" : "") }, [
-    el("button", { type: "button", class: "day-head", onclick: function () { App.calPhone = "day"; App.calDay = info.date; render(); } }, [
+    el("button", { type: "button", class: "day-head", onclick: function () { App.calMode = "day"; App.calDay = info.date; render(); } }, [
       el("div", { class: "day-date" }, [L.shortDate(info.date), info.cycleDay ? el("small", {}, L.cycleName(App.ctx.school, info.cycleDay)) : null]),
       info.labels.length ? el("div", { class: "day-labels" }, labelChips(info)) : null
     ]),
@@ -192,17 +195,24 @@ function renderYear() {
   var months = [];
   for (var m = range[0].slice(0, 7) + "-01"; m <= range[1]; m = nextMonth(m)) months.push(m);
   var school = App.ctx.school;
-  return el("div", { class: "page page-wide" }, [
+  var page = el("div", { class: "page page-wide" }, [
     el("header", { class: "page-head" }, [
-      el("div", {}, [el("div", { class: "eyebrow" }, "Calendar"), el("h1", {}, "School year " + (school.year || range[0].slice(0, 4) + "–" + range[1].slice(2, 4))),
+      el("div", {}, [el("h1", {}, "School year " + (school.year || range[0].slice(0, 4) + "–" + range[1].slice(2, 4))),
         el("div", { class: "sub" }, school.name || "")]),
       el("div", { class: "head-tools" }, el("label", { class: "check" }, [
         el("input", { type: "checkbox", checked: showMine, onchange: function (e) { App.yearMine = e.target.checked; render(); } }), "Show my items too"]))
     ]),
-    calendarSwitch("year"),
-    labelKey(),
+    el("div", { class: "cal-bar" }, [calendarSwitch("year"), labelKey(Motion.phone())]),
     el("div", { class: "year-grid" }, months.map(function (first) { return monthCard(first, today, showMine); }))
   ]);
+  // Arriving on the year, start at this month rather than September.
+  if (App.arriving && today.slice(0, 7) !== range[0].slice(0, 7)) {
+    setTimeout(function () {
+      var current = document.querySelector('.month-card[data-month="' + today.slice(0, 7) + '"]');
+      if (current) current.scrollIntoView({ block: "start", behavior: "instant" });
+    }, 0);
+  }
+  return page;
 }
 
 function nextMonth(first) {
@@ -236,7 +246,7 @@ function monthCard(first, today, showMine) {
       mine ? el("span", { class: "ym-mine", "aria-label": "Has your items" }) : null
     ]));
   }
-  return el("section", { class: "month-card" }, [
+  return el("section", { class: "month-card", "data-month": month }, [
     el("h2", {}, L.monthYear(first)),
     el("div", { class: "ym-grid" }, cells),
     listed.length ? el("ul", { class: "ym-list" }, listed.map(function (x) {

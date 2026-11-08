@@ -4,7 +4,7 @@
    Everything typed by a teacher is put on screen with textContent (via el), never as HTML. */
 "use strict";
 
-var App = { data: null, ctx: null, view: "today", param: "", todayPane: "lessons", classSearch: "", todoFilter: "", calPhone: "day", calDay: "", yearMine: false };
+var App = { data: null, ctx: null, view: "today", param: "", todayPane: "lessons", classSearch: "", todoFilter: "", calMode: "", calDay: "", yearMine: false };
 
 var ICONS = {
   today: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
@@ -167,9 +167,10 @@ function render() {
   document.getElementById("new-side").hidden = setup;
 }
 
+// The Tasks badge: to-dos due or overdue, plus anything waiting for a date.
 function attentionCount() {
   var groups = L.groupTodos(App.ctx, todayStr());
-  return groups.overdue.length + groups.today.length;
+  return groups.overdue.length + groups.today.length + L.undatedCount(L.undated(App.ctx));
 }
 
 function renderNav() {
@@ -181,7 +182,7 @@ function renderNav() {
       return el("a", { href: "#" + n.id, "aria-current": App.view === n.id ? "page" : null }, [
         icon(n.id === "week" ? "week" : n.id),
         el("span", {}, n.label),
-        n.id === "todos" && count ? el("span", { class: "count", "aria-label": count + " due or overdue" }, String(count)) : null
+        n.id === "todos" && count ? el("span", { class: "count", "aria-label": count + " need attention: due, overdue or without a date" }, String(count)) : null
       ]);
     }));
   });
@@ -380,9 +381,8 @@ function boot(result) {
   // An older Google web app doesn't know about marking, covered or follow-ups and would drop them.
   if (!("marks" in result)) {
     toast("The Google web app needs updating before Covered, Follow up and marking can be saved: paste the new Code.gs into Apps Script and deploy a new version.", true);
-    return;
   }
-  maybeAskUndated();
+  // Undated items are counted on the Tasks tab and listed on Today and Tasks; nothing pops up.
 }
 
 function loadNotebook() {

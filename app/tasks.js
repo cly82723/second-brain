@@ -1,7 +1,5 @@
-/* Tasks: to-dos (with categories) and marking, plus the undated-items prompt: a card on Today and a
-   pop-up the first time the app is opened each day, each row with a date picker. */
-
-var ASKED_KEY = "tsb-undated-asked";
+/* Tasks: to-dos (with categories) and marking, plus "Needs a date": a card on Today and on Tasks
+   (counted in the Tasks badge, never a pop-up), each row with a date picker. */
 
 function renderTodos() {
   return App.param === "mark" ? renderMarks() : renderTodoList();
@@ -29,10 +27,11 @@ function renderTodoList() {
   var chips = [["", "All"]].concat(App.ctx.categories.map(function (c) { return [c.id, c.name]; })).concat([["none", "No category"]]);
   return el("div", { class: "page", style: "max-width:760px" }, [
     el("header", { class: "page-head" }, [
-      el("div", {}, [el("div", { class: "eyebrow" }, "Tasks"), el("h1", {}, open ? open + " to do" : "All clear")]),
+      el("div", {}, [el("h1", {}, open ? open + " to do" : "All clear")]),
       el("div", { class: "head-tools" }, el("button", { type: "button", class: "btn btn-ink", onclick: function () { openTodoEditor(null, { category: filter && filter !== "none" ? filter : "" }); } }, "New to-do"))
     ]),
     tasksSwitch("todos"),
+    needsDatePanel(),
     el("div", { class: "filter-chips", role: "group", "aria-label": "Category" }, chips.map(function (c) {
       var cat = App.ctx.categoryById[c[0]];
       return el("button", { type: "button", class: "filter-chip" + (cat ? " c-" + cat.colour : ""), "aria-pressed": filter === c[0] ? "true" : "false",
@@ -63,7 +62,7 @@ function renderMarks() {
   var rest = open.filter(function (m) { return !(m.due && m.due < today); });
   return el("div", { class: "page", style: "max-width:760px" }, [
     el("header", { class: "page-head" }, [
-      el("div", {}, [el("div", { class: "eyebrow" }, "Tasks"), el("h1", {}, open.length ? open.length + " to mark" : "Nothing to mark")]),
+      el("div", {}, [el("h1", {}, open.length ? open.length + " to mark" : "Nothing to mark")]),
       el("div", { class: "head-tools" }, el("button", { type: "button", class: "btn btn-ink", onclick: function () { openMarkEditor(null, {}); } }, "New marking"))
     ]),
     tasksSwitch("mark"),
@@ -122,23 +121,8 @@ function needsDatePanel() {
   ]);
 }
 
-function askedToday() {
-  try { return localStorage.getItem(ASKED_KEY) === todayStr(); } catch (e) { return false; }
-}
-
-function rememberAsked() {
-  try { localStorage.setItem(ASKED_KEY, todayStr()); } catch (e) { /* private browsing: it may ask again next time */ }
-}
-
-// The first time the app opens each day, if anything has no date, ask about it.
-function maybeAskUndated() {
-  if (!App.data || !App.data.settings.setupDone || askedToday()) return;
-  if (!L.undatedCount(L.undated(App.ctx))) return;
-  rememberAsked();
-  openUndatedPrompt(false);
-}
-
-function openUndatedPrompt(fromCard) {
+// The full list, from the card's "See all".
+function openUndatedPrompt() {
   var list = el("ul", { class: "list" });
   function refill() {
     var rows = undatedRows(refill);
@@ -147,7 +131,7 @@ function openUndatedPrompt(fromCard) {
   }
   refill();
   if (!list.firstChild) return;
-  openDrawer("These need a date", fromCard ? null : "Give each one a date so it shows up on the right day. You can leave any of them empty.", [list], [
-    el("button", { type: "button", class: "btn", onclick: function () { closeLayer(); } }, fromCard ? "Close" : "Skip for today")
+  openDrawer("These need a date", "Give each one a date so it shows up on the right day. You can leave any of them empty.", [list], [
+    el("button", { type: "button", class: "btn", onclick: function () { closeLayer(); } }, "Close")
   ]);
 }

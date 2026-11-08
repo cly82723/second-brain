@@ -30,7 +30,7 @@ function showLocked(message) {
 
   document.getElementById("main").replaceChildren(el("div", { class: "page connect page-enter" }, [
     el("header", { class: "setup-head" }, [
-      el("div", { class: "eyebrow" }, "Teachers' Second Brain"),
+      
       el("h1", {}, "This notebook is private"),
       el("p", {}, "It opens from its owner's personal link.")
     ]),
