@@ -63,6 +63,20 @@ node tools/preview.js 8331 --locked   # the locked screen
 The demo uses the converted Word log from `../teachers-second-brain/data/yau-2026-27.json` on this
 computer (personal, so not in this repo).
 
+## Giving another teacher their own notebook
+
+Everyone uses the same site and the same web app; each teacher has their own secret link and their
+own Google Sheet (kept in the owner's Drive, so the owner can see it).
+
+1. In Apps Script, near the top of the `Code.gs` part, fill in
+   `var NEW_TEACHER = { name: "CCY", email: "their@email" };` (the email is for their evening email).
+2. Choose **addTeacher** in the function menu and press **Run**. The log shows **their personal link**.
+   Running it again with the same name shows the same link. **listTeachers** shows every link again.
+3. Optional set-up for them: open their link in a **private/incognito window** (opening it in your
+   normal browser would switch that browser to their notebook), then **Settings → Import a file**.
+4. Send them the link privately. To remove a teacher, delete their entry from the `NOTEBOOKS` script
+   property (Project Settings → Script properties); their Sheet stays in your Drive.
+
 ## Adding a school's calendar
 
 In `apps-script/Schools.gs`, copy the `KINGS_COLLEGE_2026` block, set `cycleFrom`/`cycleTo`, list

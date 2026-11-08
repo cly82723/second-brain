@@ -36,6 +36,27 @@ test("weekday-only label ranges skip weekends", () => {
   assert.strictEqual(school.labels["2026-10-24"], undefined);
 });
 
+// Read off the KTGSS 2026/27 calendar (Chinese numerals 一 to 七 = Day 1 to 7).
+const KTGSS_PRINTED = {
+  "2026-09-02": 1, "2026-09-11": 1, "2026-09-24": 3, "2026-09-30": 6, "2026-10-02": 7, "2026-10-12": 6,
+  "2026-10-14": 7, "2026-10-30": 4, "2026-11-06": 2, "2026-11-30": 4, "2026-12-04": 1, "2026-12-17": 1,
+  "2027-01-04": 2, "2027-01-22": 7, "2027-01-29": 3, "2027-02-02": 5, "2027-02-16": 6, "2027-02-25": 5,
+  "2027-03-01": 6, "2027-03-23": 1, "2027-04-02": 2, "2027-04-30": 7, "2027-05-03": 1, "2027-05-12": 1,
+  "2027-05-31": 5, "2027-06-04": 1, "2027-06-22": 2, "2027-06-25": 5
+};
+
+test("Kwun Tong Government Secondary School cycle days match the printed calendar", () => {
+  const ktgss = s.ctx.buildSchool_("ktgss-2026");
+  for (const [date, day] of Object.entries(KTGSS_PRINTED)) {
+    assert.strictEqual(ktgss.cycleDays[date], day, date);
+  }
+  ["2026-09-01", "2026-09-25", "2026-10-13", "2026-12-11", "2027-01-07", "2027-01-25", "2027-02-22", "2027-03-24", "2027-06-01", "2027-06-21", "2027-06-28"]
+    .forEach(date => assert.strictEqual(L.dayInfo(ktgss, date).cycleDay, null, date));
+  assert.strictEqual(L.dayInfo(ktgss, "2026-12-14").holiday, true);
+  assert.strictEqual(L.dayInfo(ktgss, "2026-11-06").holiday, false);
+  assert.strictEqual(s.ctx.schoolSpec_("ktgss-2026").periods.filter(p => p.teaching).length, 8);
+});
+
 test("a school that isn't listed gets a plain Monday-to-Friday week", () => {
   const other = s.ctx.buildSchool_("other");
   assert.strictEqual(L.dayInfo(other, "2026-11-05").cycleDay, 4);

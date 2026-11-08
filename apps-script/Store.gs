@@ -25,21 +25,33 @@ var TABS = {
 var NUMBER_FIELDS = { day: true, repeatOn: true };
 var BOOLEAN_FIELDS = { done: true, replaces: true };
 
+// The owner's Sheet keeps the original property name, so existing data is found unchanged.
+function sheetIdKeyFor_(notebook) {
+  return notebook.owner ? SHEET_ID_KEY : SHEET_ID_KEY + ":" + notebook.id;
+}
+
+// Notebooks that have been opened at least once (so checking them never creates a Sheet).
+function notebooksWithData_() {
+  var props = PropertiesService.getScriptProperties();
+  return allNotebooks_().filter(function (nb) { return !!props.getProperty(sheetIdKeyFor_(nb)); });
+}
+
 function book_() {
   var props = PropertiesService.getScriptProperties();
-  var id = props.getProperty(SHEET_ID_KEY);
+  var idKey = sheetIdKeyFor_(currentNotebook_);
+  var id = props.getProperty(idKey);
   if (id) {
     var opened = openDataSheet_(id);
     if (opened) return opened;
   }
-  // Creating is done under the user's lock, so two pages opened at once can't make two sheets.
+  // Creating is done under the script lock, so two pages opened at once can't make two sheets.
   var lock = LockService.getScriptLock();
   var hadLock = lock.hasLock();
   if (!hadLock) lock.waitLock(20000);
   try {
-    var again = props.getProperty(SHEET_ID_KEY);
-    if (again && again !== id) return openDataSheet_(again) || createDataSheet_(props);
-    return createDataSheet_(props);
+    var again = props.getProperty(idKey);
+    if (again && again !== id) return openDataSheet_(again) || createDataSheet_(props, idKey);
+    return createDataSheet_(props, idKey);
   } finally {
     if (!hadLock) lock.releaseLock();
   }
@@ -62,13 +74,14 @@ function openDataSheet_(id) {
   }
 }
 
-function createDataSheet_(props) {
-  var book = SpreadsheetApp.create(DATA_FILE_NAME);
-  Object.keys(TABS).forEach(function (name, i) {
-    var sheet = i === 0 ? book.getSheets()[0].setName(name) : book.insertSheet(name);
-    addHeaders_(sheet, name);
+function createDataSheet_(props, idKey) {
+  var name = currentNotebook_.owner ? DATA_FILE_NAME : DATA_FILE_NAME + " – " + currentNotebook_.name;
+  var book = SpreadsheetApp.create(name);
+  Object.keys(TABS).forEach(function (tabName, i) {
+    var sheet = i === 0 ? book.getSheets()[0].setName(tabName) : book.insertSheet(tabName);
+    addHeaders_(sheet, tabName);
   });
-  props.setProperty(SHEET_ID_KEY, book.getId());
+  props.setProperty(idKey, book.getId());
   return book;
 }
 

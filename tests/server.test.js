@@ -6,6 +6,7 @@ const fs = require("fs");
 const { loadServer, OWNER } = require("./fake-gas");
 
 const THU_NOON = Date.parse("2026-11-05T12:00:00+08:00");
+const AT_8PM = Date.parse("2026-11-05T20:10:00+08:00");
 // Values made inside the script sandbox have their own Array type; compare them as plain JSON.
 const plain = x => JSON.parse(JSON.stringify(x));
 // The converted Word log is personal, so it stays outside this public repo (next to it on this computer).
@@ -164,7 +165,11 @@ test("the evening email covers tomorrow and is only sent when something is on", 
   const on = s.call("saveEmail", { on: true, hour: 20 });
   assert.strictEqual(on.ok, true);
   assert.strictEqual(s.triggers.length, 1);
-  assert.strictEqual(s.triggers[0].hour, 20);
+  assert.strictEqual(s.triggers[0].everyHours, 1);
+  // The hourly trigger sends nothing before the chosen hour, then sends once it's 8 pm.
+  s.ctx.dailyDigest();
+  assert.strictEqual(s.sent.length, 0);
+  s.setNow(AT_8PM);
   s.ctx.dailyDigest();
   assert.strictEqual(s.sent.length, 1);
   const mail = s.sent[0];
@@ -185,6 +190,7 @@ test("email HTML escapes what teachers typed", () => {
   setUp(s);
   s.call("saveLog", { date: "2026-11-06", classId: "c-3d", plan: "<script>x</script>" });
   s.call("saveEmail", { on: true, hour: 20 });
+  s.setNow(AT_8PM);
   s.ctx.dailyDigest();
   assert.ok(!s.sent[0].htmlBody.includes("<script>"));
   assert.ok(s.sent[0].htmlBody.includes("&lt;script&gt;"));
@@ -295,7 +301,144 @@ test("the evening email links to the site without the secret code", () => {
   setUp(s);
   s.call("saveLog", { date: "2026-11-06", classId: "c-3d", plan: "ERS" });
   s.call("saveEmail", { on: true, hour: 20 });
+  s.setNow(AT_8PM);
   s.ctx.dailyDigest();
   assert.ok(s.sent[0].htmlBody.includes("https://cly82723.github.io/second-brain/"));
   assert.ok(!s.sent[0].htmlBody.includes(KEY));
+});
+
+// ---------- other teachers' notebooks ----------
+const GUEST_EMAIL = "colleague@example.com";
+
+function addGuest(s, name = "CCY", email = GUEST_EMAIL) {
+  s.ctx.NEW_TEACHER.name = name;
+  s.ctx.NEW_TEACHER.email = email;
+  const link = s.ctx.addTeacher();
+  return link.split("#k=")[1];
+}
+
+function guestId(s) { return JSON.parse(s.props.NOTEBOOKS)[0].id; }
+
+const KTGSS_SETUP = (s) => ({
+  schoolId: "ktgss-2026",
+  periods: s.ctx.KTGSS_PERIODS,
+  classes: [{ id: "c-4a", name: "4A English", colour: "sage" }],
+  timetable: [{ day: 1, period: "P1", classId: "c-4a" }, { day: 2, period: "P1", classId: "c-4a" }]
+});
+
+test("addTeacher gives another teacher their own link, once per name", () => {
+  const s = loadServer({ props: { ACCESS_KEY: KEY } });
+  const key = addGuest(s);
+  assert.match(key, /^[0-9a-f]{64}$/);
+  assert.notStrictEqual(key, KEY);
+  assert.strictEqual(addGuest(s, "ccy", "new@example.com"), key); // same name: same link, email updated
+  assert.strictEqual(JSON.parse(s.props.NOTEBOOKS).length, 1);
+  assert.strictEqual(JSON.parse(s.props.NOTEBOOKS)[0].email, "new@example.com");
+  assert.throws(() => addGuest(s, "", ""), /Fill in NEW_TEACHER/);
+  assert.throws(() => addGuest(s, "XYZ", "not-an-email"), /email/);
+  assert.strictEqual(s.ctx.listTeachers()[0].link, "https://cly82723.github.io/second-brain/#k=" + key);
+});
+
+test("each teacher's link opens only their own notebook and Sheet", () => {
+  const s = loadServer({ now: THU_NOON, props: { ACCESS_KEY: KEY } });
+  const guestKey = addGuest(s);
+  setUp(s); // the owner's King's College notebook
+  const saved = s.post({ action: "saveSetup", key: guestKey, args: [KTGSS_SETUP(s)] });
+  assert.strictEqual(saved.ok, true, saved.error);
+  s.post({ action: "saveTodo", key: guestKey, args: [{ title: "Mark 4A essays" }] });
+
+  const mine = s.post({ action: "getAll", key: KEY }).data;
+  const theirs = s.post({ action: "getAll", key: guestKey }).data;
+  assert.strictEqual(mine.settings.schoolId, "kings-college-2026");
+  assert.strictEqual(theirs.settings.schoolId, "ktgss-2026");
+  assert.deepStrictEqual(mine.todos, []);
+  assert.deepStrictEqual(theirs.todos.map(t => t.title), ["Mark 4A essays"]);
+  assert.strictEqual(mine.owner, true);
+  assert.strictEqual(theirs.owner, false);
+  assert.strictEqual(mine.email, OWNER);
+  assert.strictEqual(theirs.email, GUEST_EMAIL);
+  assert.notStrictEqual(s.book(guestId(s)), s.book());
+  assert.match(s.book(guestId(s)).name, / – CCY$/);
+  // Their bell times: P1 starts at 08:40, and Day 1 on Friday 6 Nov... is Day 2 at KTGSS.
+  assert.strictEqual(theirs.periods.find(p => p.id === "P1").start, "08:40");
+  const L = s.ctx.logic_();
+  assert.deepStrictEqual(plain(L.lessonsOn(L.prepare(theirs), "2026-11-06")).map(l => l.cls.name + " " + l.start), ["4A English 08:40"]);
+  // The owner's Sheet link isn't handed to other teachers.
+  assert.strictEqual(s.post({ action: "getDataSheetUrl", key: guestKey }).ok, false);
+  assert.strictEqual(s.post({ action: "getDataSheetUrl", key: KEY }).ok, true);
+});
+
+test("a damaged notebook list locks other teachers out but never the owner", () => {
+  const s = loadServer({ props: { ACCESS_KEY: KEY } });
+  const guestKey = addGuest(s);
+  s.props.NOTEBOOKS = "{broken";
+  assert.strictEqual(s.post({ action: "getAll", key: guestKey }).locked, true);
+  assert.strictEqual(s.post({ action: "getAll", key: KEY }).ok, true);
+});
+
+test("evening emails go to each teacher at their own hour, from one hourly trigger", () => {
+  const s = loadServer({ now: THU_NOON, props: { ACCESS_KEY: KEY } });
+  const guestKey = addGuest(s);
+  setUp(s);
+  s.post({ action: "saveSetup", key: guestKey, args: [KTGSS_SETUP(s)] });
+  // From here on, every request names its notebook by key, as the page's requests do.
+  s.post({ action: "saveLog", key: KEY, args: [{ date: "2026-11-06", classId: "c-3d", plan: "Owner plan" }] });
+  s.post({ action: "saveLog", key: guestKey, args: [{ date: "2026-11-06", classId: "c-4a", plan: "Guest plan" }] });
+  s.post({ action: "saveEmail", key: KEY, args: [{ on: true, hour: 20 }] });
+  assert.strictEqual(s.post({ action: "saveEmail", key: guestKey, args: [{ on: true, hour: 21 }] }).ok, true);
+  assert.strictEqual(s.triggers.length, 1);
+
+  s.setNow(AT_8PM);
+  s.ctx.dailyDigest();
+  assert.deepStrictEqual(s.sent.map(m => m.to), [OWNER]);
+  assert.ok(s.sent[0].body.includes("Owner plan") && !s.sent[0].body.includes("Guest plan"));
+
+  s.setNow(Date.parse("2026-11-05T21:10:00+08:00"));
+  s.ctx.dailyDigest();
+  assert.deepStrictEqual(s.sent.map(m => m.to), [OWNER, GUEST_EMAIL]);
+  assert.ok(s.sent[1].body.includes("Guest plan") && !s.sent[1].body.includes("Owner plan"));
+
+  // The trigger stays while either has it on, and goes when both turn it off.
+  s.post({ action: "saveEmail", key: KEY, args: [{ on: false, hour: 20 }] });
+  assert.strictEqual(s.triggers.length, 1);
+  s.post({ action: "saveEmail", key: guestKey, args: [{ on: false, hour: 21 }] });
+  assert.strictEqual(s.triggers.length, 0);
+});
+
+test("addTeacher refuses to save over a damaged teacher list", () => {
+  const s = loadServer({ props: { ACCESS_KEY: KEY } });
+  addGuest(s);
+  s.props.NOTEBOOKS = s.props.NOTEBOOKS.slice(0, -1); // a hand-edit typo
+  const before = s.props.NOTEBOOKS;
+  assert.throws(() => addGuest(s, "Someone else"), /damaged/);
+  assert.throws(() => s.ctx.listTeachers(), /damaged/);
+  assert.strictEqual(s.props.NOTEBOOKS, before);
+});
+
+test("the evening email is sent once a day: never twice, and late rather than lost", () => {
+  const s = loadServer({ now: THU_NOON });
+  setUp(s);
+  s.call("saveLog", { date: "2026-11-06", classId: "c-3d", plan: "ERS" });
+  s.call("saveEmail", { on: true, hour: 20 });
+  // The 8 pm run was skipped by Google: the 9 pm run sends it.
+  s.setNow(Date.parse("2026-11-05T21:05:00+08:00"));
+  s.ctx.dailyDigest();
+  assert.strictEqual(s.sent.length, 1);
+  // Saving the setting again and another run the same evening send nothing more.
+  s.call("saveEmail", { on: true, hour: 20 });
+  s.setNow(Date.parse("2026-11-05T21:40:00+08:00"));
+  s.ctx.dailyDigest();
+  s.setNow(Date.parse("2026-11-05T22:05:00+08:00"));
+  s.ctx.dailyDigest();
+  assert.strictEqual(s.sent.length, 1);
+});
+
+test("a teacher added without an email can't turn the evening email on", () => {
+  const s = loadServer({ props: { ACCESS_KEY: KEY } });
+  const guestKey = addGuest(s, "No Mail", "");
+  const res = s.post({ action: "saveEmail", key: guestKey, args: [{ on: true, hour: 20 }] });
+  assert.strictEqual(res.ok, false);
+  assert.match(res.error, /no email address/);
+  assert.strictEqual(s.post({ action: "sendTestEmail", key: guestKey }).ok, false);
+  assert.strictEqual(s.sent.length, 0);
 });

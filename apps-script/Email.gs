@@ -1,7 +1,8 @@
-/* The evening round-up email. Each teacher who turns it on gets a daily trigger that runs as them,
-   so it reads only their own Sheet and sends only to their own address. */
+/* The evening round-up email. One hourly trigger (running as the owner) looks at every notebook
+   and emails each one whose chosen hour it is, to that notebook's own address (recipient_). */
 
 var DIGEST_HANDLER = "dailyDigest";
+var NO_ADDRESS = "There's no email address for this notebook yet. Ask the person who set up the app to add one.";
 
 function saveEmail(request) {
   return respond_(function () {
@@ -9,35 +10,68 @@ function saveEmail(request) {
       var on = !!(request && request.on);
       var hour = Number(request && request.hour);
       if (EMAIL_HOURS.indexOf(hour) < 0) throw new UserError_("Please pick a time between 4 pm and 11 pm.");
-      removeDigestTriggers_();
-      if (on) ScriptApp.newTrigger(DIGEST_HANDLER).timeBased().everyDays(1).atHour(hour).create();
-      var email = { on: on, hour: hour };
+      if (on && !recipient_()) throw new UserError_(NO_ADDRESS);
+      // Keeps the day it was last sent, so saving again after tonight's email doesn't send a second.
+      var previous = readSettings_().email || {};
+      var email = { on: on, hour: hour, lastSent: previous.lastSent || "" };
       writeSetting_("email", email);
+      syncDigestTrigger_();
       return { email: email };
     });
   });
 }
 
-function removeDigestTriggers_() {
+// Exactly one hourly trigger while anyone has the email on; none otherwise.
+function syncDigestTrigger_() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === DIGEST_HANDLER) ScriptApp.deleteTrigger(t);
   });
+  if (anyEmailOn_()) ScriptApp.newTrigger(DIGEST_HANDLER).timeBased().everyHours(1).create();
 }
 
-// Run by the daily trigger. Sends nothing when tomorrow has nothing on.
+// A notebook that can't be read just now counts as on, so nobody's email is switched off by a hiccup.
+function anyEmailOn_() {
+  return notebooksWithData_().some(function (nb) {
+    try {
+      return withNotebook_(nb, function () { var e = readSettings_().email; return !!(e && e.on); });
+    } catch (e) {
+      console.warn("Couldn't check the evening email setting for " + (nb.name || "the owner") + ": " + (e && e.message || e));
+      return true;
+    }
+  });
+}
+
+// Run by the hourly trigger. Each notebook is dealt with once a day, at the first run on or after its
+// chosen hour (so a skipped trigger run only makes it later, never lost), and an email goes out only
+// when tomorrow has something on. One notebook failing doesn't stop the others.
 function dailyDigest() {
+  var hour = Number(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "HH:mm").slice(0, 2));
+  notebooksWithData_().forEach(function (nb) {
+    try {
+      withNotebook_(nb, function () { withLock_(function () { sendDigestIfDue_(hour); }); });
+    } catch (e) {
+      console.error("Evening email for " + (nb.name || "the owner") + " failed: " + (e && e.stack ? e.stack : e));
+    }
+  });
+}
+
+function sendDigestIfDue_(hour) {
   var settings = readSettings_();
-  if (!settings.email || !settings.email.on) return;
+  var email = settings.email;
+  var today = today_();
+  if (!email || !email.on || hour < Number(email.hour) || email.lastSent === today || !recipient_()) return;
   var ctx = context_();
-  var digest = logic_().digest(ctx, today_(), settings.startDate || "");
+  var digest = logic_().digest(ctx, today, settings.startDate || "");
   if (digest) sendDigest_(ctx, digest);
+  writeSetting_("email", Object.assign({}, email, { lastSent: today }));
 }
 
 function sendTestEmail() {
   return respond_(function () {
+    var to = recipient_();
+    if (!to) throw new UserError_(NO_ADDRESS);
     var ctx = context_();
     var digest = logic_().digest(ctx, today_(), readSettings_().startDate || "");
-    var to = ownerEmail_();
     if (!digest) {
       MailApp.sendEmail({ to: to, subject: APP_NAME + ": test email", name: APP_NAME,
         body: "Your evening email works. Tomorrow has nothing on, so on a real evening like this one no email would be sent." });
@@ -50,12 +84,7 @@ function sendTestEmail() {
 
 function sendDigest_(ctx, digest) {
   var mail = digestEmail_(ctx, digest, appUrl_());
-  MailApp.sendEmail({ to: ownerEmail_(), subject: mail.subject, htmlBody: mail.html, body: mail.text, name: APP_NAME });
-}
-
-// In a trigger, getActiveUser can come back empty; the trigger always runs as its owner, the effective user.
-function ownerEmail_() {
-  return Session.getEffectiveUser().getEmail();
+  MailApp.sendEmail({ to: recipient_(), subject: mail.subject, htmlBody: mail.html, body: mail.text, name: APP_NAME });
 }
 
 // The plain site address, without the secret code: a forwarded email doesn't hand over access.

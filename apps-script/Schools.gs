@@ -119,6 +119,118 @@ var KINGS_COLLEGE_2026 = {
   ]
 };
 
+// Kwun Tong Government Secondary School bell times (from a 2026–27 teacher timetable).
+var KTGSS_PERIODS = [
+  { id: "RC1", label: "Roll call / assembly", start: "08:05", end: "08:40", teaching: false },
+  { id: "P1", label: "P1", start: "08:40", end: "09:20", teaching: true },
+  { id: "P2", label: "P2", start: "09:20", end: "10:00", teaching: true },
+  { id: "P3", label: "P3", start: "10:00", end: "10:40", teaching: true },
+  { id: "REC", label: "Recess", start: "10:40", end: "11:00", teaching: false },
+  { id: "P4", label: "P4", start: "11:00", end: "11:40", teaching: true },
+  { id: "P5", label: "P5", start: "11:40", end: "12:20", teaching: true },
+  { id: "P6", label: "P6", start: "12:20", end: "13:00", teaching: true },
+  { id: "LUN", label: "Lunch", start: "13:00", end: "14:10", teaching: false },
+  { id: "RC", label: "Roll call", start: "14:10", end: "14:20", teaching: false },
+  { id: "P7", label: "P7", start: "14:20", end: "15:00", teaching: true },
+  { id: "P8", label: "P8", start: "15:00", end: "15:40", teaching: true }
+];
+
+// From "26-27 Revised Calendar Table for SMC (as at 21.8.2026)".
+var KTGSS_2026 = {
+  id: "ktgss-2026",
+  name: "Kwun Tong Government Secondary School",
+  year: "2026–27",
+  kind: "cycle",
+  cycleLength: 7,
+  periods: KTGSS_PERIODS,
+  first: "2026-09-01",
+  last: "2027-08-31",
+  cycleFrom: "2026-09-02",
+  cycleTo: "2027-06-25",
+  noCycle: [
+    "2026-09-25", "2026-10-01", "2026-10-13", "2026-10-19",
+    "2026-12-11", "2026-12-14", "2026-12-18", "2026-12-21",
+    "2026-12-22", "2026-12-23", "2026-12-24", "2026-12-25",
+    "2026-12-28", "2026-12-29", "2026-12-30", "2026-12-31", "2027-01-01",
+    "2027-01-07", "2027-01-08", "2027-01-11", "2027-01-12", "2027-01-13", "2027-01-14", "2027-01-15",
+    "2027-01-18", "2027-01-19", "2027-01-25", "2027-01-26",
+    "2027-02-03", "2027-02-04", "2027-02-05", "2027-02-08", "2027-02-09", "2027-02-10", "2027-02-11", "2027-02-12",
+    "2027-02-15", "2027-02-22", "2027-02-26",
+    "2027-03-24", "2027-03-25", "2027-03-26", "2027-03-29", "2027-03-30", "2027-03-31", "2027-04-01", "2027-04-05",
+    "2027-05-13", "2027-05-14",
+    "2027-06-01", "2027-06-07", "2027-06-08", "2027-06-09", "2027-06-10", "2027-06-11",
+    "2027-06-14", "2027-06-15", "2027-06-16", "2027-06-17", "2027-06-18", "2027-06-21"
+  ],
+  labels: [
+    ["2026-09-01", "2026-09-01", "First Day of School", "S"],
+    ["2026-09-10", "2026-09-10", "Teachers' Day", "S"],
+    ["2026-09-11", "2026-09-12", "S.1 Life Camp", "S"],
+    ["2026-09-21", "2026-09-21", "House Meeting", "S"],
+    ["2026-09-25", "2026-09-25", "Staff Development Day", "S"],
+    ["2026-09-26", "2026-09-26", "The day following Mid-Autumn Festival", "H"],
+    ["2026-10-01", "2026-10-01", "National Day", "H"],
+    ["2026-10-09", "2026-10-09", "Student Union Election Day", "S"],
+    ["2026-10-13", "2026-10-13", "Swimming Gala", "A"],
+    ["2026-10-16", "2026-10-16", "PTA AGM", "S"],
+    ["2026-10-19", "2026-10-19", "The day following Chung Yeung Festival", "H"],
+    ["2026-10-21", "2026-10-29", "S.1–S.5 First Uniform Test", "U", true],
+    ["2026-11-06", "2026-11-06", "Speech Day", "S"],
+    ["2026-11-16", "2026-11-16", "School Photo Day", "S"],
+    ["2026-11-18", "2026-11-26", "S.6 Uniform Test", "U", true],
+    ["2026-11-27", "2026-11-27", "S.1 Parents' Talk", "S"],
+    ["2026-11-30", "2026-12-04", "Smart Teen", "S", true],
+    ["2026-12-09", "2026-12-09", "S.3 Talk for S.4 Streaming", "S"],
+    ["2026-12-11", "2026-12-12", "45th Anniversary Open Day", "S"],
+    ["2026-12-14", "2026-12-14", "Discretionary Holiday", "H"],
+    ["2026-12-18", "2026-12-18", "Student Development Day", "A"],
+    ["2026-12-21", "2026-12-21", "Student Activity Day", "A"],
+    ["2026-12-22", "2027-01-02", "Christmas and New Year holidays", "H"],
+    ["2027-01-04", "2027-01-19", "S.6 Mock Examination", "E", true],
+    ["2027-01-04", "2027-01-19", "S.4–S.5 Half-yearly Exam", "E", true],
+    ["2027-01-07", "2027-01-19", "S.1–S.3 Half-yearly Exam", "E", true],
+    ["2027-01-20", "2027-01-20", "Commencement of Second Term", "S"],
+    ["2027-01-20", "2027-01-22", "Going over exam papers", "S"],
+    ["2027-01-25", "2027-01-25", "Sports Day (Heats)", "A"],
+    ["2027-01-26", "2027-01-26", "Discretionary Holiday", "H"],
+    ["2027-01-27", "2027-01-27", "Going over exam papers", "S"],
+    ["2027-02-01", "2027-02-01", "Mark Checking", "S"],
+    ["2027-02-03", "2027-02-13", "Lunar New Year holidays", "H"],
+    ["2027-02-15", "2027-02-15", "Teachers' Symposium", "S"],
+    ["2027-02-22", "2027-02-22", "Sports Day (Finals)", "A"],
+    ["2027-02-25", "2027-02-25", "Last School Day for S.6", "S"],
+    ["2027-02-26", "2027-02-26", "Parents' Day", "S"],
+    ["2027-03-15", "2027-03-23", "S.1–S.5 Second Uniform Test", "U", true],
+    ["2027-03-24", "2027-03-24", "Life-wide Learning Day", "A"],
+    ["2027-03-25", "2027-04-01", "Easter holidays", "H"],
+    ["2027-04-05", "2027-04-05", "Ching Ming Festival", "H"],
+    ["2027-04-08", "2027-04-13", "HKDSE Exam (Core Subjects)", "E", true],
+    ["2027-04-28", "2027-04-29", "S.3 TSA (Oral), 28 or 29 Apr", "E"],
+    ["2027-05-01", "2027-05-01", "Labour Day", "H"],
+    ["2027-05-03", "2027-05-03", "S.3 TSA (Oral) fallback date", "E"],
+    ["2027-05-04", "2027-05-07", "English Week", "S"],
+    ["2027-05-13", "2027-05-13", "Birthday of the Buddha", "H"],
+    ["2027-05-14", "2027-05-14", "Discretionary Holiday", "H"],
+    ["2027-06-01", "2027-06-01", "Staff Development Day", "S"],
+    ["2027-06-02", "2027-06-21", "S.4–S.5 Yearly Exam", "E", true],
+    ["2027-06-07", "2027-06-21", "S.1–S.3 Yearly Exam", "E", true],
+    ["2027-06-09", "2027-06-09", "Tuen Ng Festival", "H"],
+    ["2027-06-17", "2027-06-18", "S.3 TSA (Written)", "E"],
+    ["2027-06-22", "2027-06-25", "S.1–S.5 going over exam papers", "S"],
+    ["2027-06-23", "2027-06-23", "S.3 TSA (Written) fallback date", "E"],
+    ["2027-06-28", "2027-07-09", "Post-examination activities", "A", true],
+    ["2027-06-29", "2027-06-29", "Graduation Day", "S"],
+    ["2027-06-30", "2027-06-30", "Graduation Day fallback date", "S"],
+    ["2027-07-01", "2027-07-01", "HKSAR Establishment Day", "H"],
+    ["2027-07-02", "2027-07-02", "Mark Checking", "S"],
+    ["2027-07-06", "2027-07-06", "Promotion Meeting", "S"],
+    ["2027-07-08", "2027-07-09", "S.1 Registration", "S"],
+    ["2027-07-12", "2027-07-12", "Last Day of School", "S"],
+    ["2027-07-13", "2027-08-31", "Summer vacation", "H"],
+    ["2027-07-13", "2027-07-13", "Pre-S.1 Attainment Test", "S"],
+    ["2027-07-14", "2027-07-14", "Release of HKDSE results", "S"]
+  ]
+};
+
 // For a school whose calendar hasn't been added yet: Monday to Friday, no holidays.
 var OTHER_SCHOOL = {
   id: "other",
@@ -129,7 +241,7 @@ var OTHER_SCHOOL = {
   periods: STANDARD_PERIODS
 };
 
-var SCHOOL_SPECS = [KINGS_COLLEGE_2026, OTHER_SCHOOL];
+var SCHOOL_SPECS = [KINGS_COLLEGE_2026, KTGSS_2026, OTHER_SCHOOL];
 var DEFAULT_SCHOOL_ID = OTHER_SCHOOL.id;
 
 function listSchools_() {

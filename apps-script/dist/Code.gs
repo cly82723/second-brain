@@ -387,6 +387,118 @@ var KINGS_COLLEGE_2026 = {
   ]
 };
 
+// Kwun Tong Government Secondary School bell times (from a 2026–27 teacher timetable).
+var KTGSS_PERIODS = [
+  { id: "RC1", label: "Roll call / assembly", start: "08:05", end: "08:40", teaching: false },
+  { id: "P1", label: "P1", start: "08:40", end: "09:20", teaching: true },
+  { id: "P2", label: "P2", start: "09:20", end: "10:00", teaching: true },
+  { id: "P3", label: "P3", start: "10:00", end: "10:40", teaching: true },
+  { id: "REC", label: "Recess", start: "10:40", end: "11:00", teaching: false },
+  { id: "P4", label: "P4", start: "11:00", end: "11:40", teaching: true },
+  { id: "P5", label: "P5", start: "11:40", end: "12:20", teaching: true },
+  { id: "P6", label: "P6", start: "12:20", end: "13:00", teaching: true },
+  { id: "LUN", label: "Lunch", start: "13:00", end: "14:10", teaching: false },
+  { id: "RC", label: "Roll call", start: "14:10", end: "14:20", teaching: false },
+  { id: "P7", label: "P7", start: "14:20", end: "15:00", teaching: true },
+  { id: "P8", label: "P8", start: "15:00", end: "15:40", teaching: true }
+];
+
+// From "26-27 Revised Calendar Table for SMC (as at 21.8.2026)".
+var KTGSS_2026 = {
+  id: "ktgss-2026",
+  name: "Kwun Tong Government Secondary School",
+  year: "2026–27",
+  kind: "cycle",
+  cycleLength: 7,
+  periods: KTGSS_PERIODS,
+  first: "2026-09-01",
+  last: "2027-08-31",
+  cycleFrom: "2026-09-02",
+  cycleTo: "2027-06-25",
+  noCycle: [
+    "2026-09-25", "2026-10-01", "2026-10-13", "2026-10-19",
+    "2026-12-11", "2026-12-14", "2026-12-18", "2026-12-21",
+    "2026-12-22", "2026-12-23", "2026-12-24", "2026-12-25",
+    "2026-12-28", "2026-12-29", "2026-12-30", "2026-12-31", "2027-01-01",
+    "2027-01-07", "2027-01-08", "2027-01-11", "2027-01-12", "2027-01-13", "2027-01-14", "2027-01-15",
+    "2027-01-18", "2027-01-19", "2027-01-25", "2027-01-26",
+    "2027-02-03", "2027-02-04", "2027-02-05", "2027-02-08", "2027-02-09", "2027-02-10", "2027-02-11", "2027-02-12",
+    "2027-02-15", "2027-02-22", "2027-02-26",
+    "2027-03-24", "2027-03-25", "2027-03-26", "2027-03-29", "2027-03-30", "2027-03-31", "2027-04-01", "2027-04-05",
+    "2027-05-13", "2027-05-14",
+    "2027-06-01", "2027-06-07", "2027-06-08", "2027-06-09", "2027-06-10", "2027-06-11",
+    "2027-06-14", "2027-06-15", "2027-06-16", "2027-06-17", "2027-06-18", "2027-06-21"
+  ],
+  labels: [
+    ["2026-09-01", "2026-09-01", "First Day of School", "S"],
+    ["2026-09-10", "2026-09-10", "Teachers' Day", "S"],
+    ["2026-09-11", "2026-09-12", "S.1 Life Camp", "S"],
+    ["2026-09-21", "2026-09-21", "House Meeting", "S"],
+    ["2026-09-25", "2026-09-25", "Staff Development Day", "S"],
+    ["2026-09-26", "2026-09-26", "The day following Mid-Autumn Festival", "H"],
+    ["2026-10-01", "2026-10-01", "National Day", "H"],
+    ["2026-10-09", "2026-10-09", "Student Union Election Day", "S"],
+    ["2026-10-13", "2026-10-13", "Swimming Gala", "A"],
+    ["2026-10-16", "2026-10-16", "PTA AGM", "S"],
+    ["2026-10-19", "2026-10-19", "The day following Chung Yeung Festival", "H"],
+    ["2026-10-21", "2026-10-29", "S.1–S.5 First Uniform Test", "U", true],
+    ["2026-11-06", "2026-11-06", "Speech Day", "S"],
+    ["2026-11-16", "2026-11-16", "School Photo Day", "S"],
+    ["2026-11-18", "2026-11-26", "S.6 Uniform Test", "U", true],
+    ["2026-11-27", "2026-11-27", "S.1 Parents' Talk", "S"],
+    ["2026-11-30", "2026-12-04", "Smart Teen", "S", true],
+    ["2026-12-09", "2026-12-09", "S.3 Talk for S.4 Streaming", "S"],
+    ["2026-12-11", "2026-12-12", "45th Anniversary Open Day", "S"],
+    ["2026-12-14", "2026-12-14", "Discretionary Holiday", "H"],
+    ["2026-12-18", "2026-12-18", "Student Development Day", "A"],
+    ["2026-12-21", "2026-12-21", "Student Activity Day", "A"],
+    ["2026-12-22", "2027-01-02", "Christmas and New Year holidays", "H"],
+    ["2027-01-04", "2027-01-19", "S.6 Mock Examination", "E", true],
+    ["2027-01-04", "2027-01-19", "S.4–S.5 Half-yearly Exam", "E", true],
+    ["2027-01-07", "2027-01-19", "S.1–S.3 Half-yearly Exam", "E", true],
+    ["2027-01-20", "2027-01-20", "Commencement of Second Term", "S"],
+    ["2027-01-20", "2027-01-22", "Going over exam papers", "S"],
+    ["2027-01-25", "2027-01-25", "Sports Day (Heats)", "A"],
+    ["2027-01-26", "2027-01-26", "Discretionary Holiday", "H"],
+    ["2027-01-27", "2027-01-27", "Going over exam papers", "S"],
+    ["2027-02-01", "2027-02-01", "Mark Checking", "S"],
+    ["2027-02-03", "2027-02-13", "Lunar New Year holidays", "H"],
+    ["2027-02-15", "2027-02-15", "Teachers' Symposium", "S"],
+    ["2027-02-22", "2027-02-22", "Sports Day (Finals)", "A"],
+    ["2027-02-25", "2027-02-25", "Last School Day for S.6", "S"],
+    ["2027-02-26", "2027-02-26", "Parents' Day", "S"],
+    ["2027-03-15", "2027-03-23", "S.1–S.5 Second Uniform Test", "U", true],
+    ["2027-03-24", "2027-03-24", "Life-wide Learning Day", "A"],
+    ["2027-03-25", "2027-04-01", "Easter holidays", "H"],
+    ["2027-04-05", "2027-04-05", "Ching Ming Festival", "H"],
+    ["2027-04-08", "2027-04-13", "HKDSE Exam (Core Subjects)", "E", true],
+    ["2027-04-28", "2027-04-29", "S.3 TSA (Oral), 28 or 29 Apr", "E"],
+    ["2027-05-01", "2027-05-01", "Labour Day", "H"],
+    ["2027-05-03", "2027-05-03", "S.3 TSA (Oral) fallback date", "E"],
+    ["2027-05-04", "2027-05-07", "English Week", "S"],
+    ["2027-05-13", "2027-05-13", "Birthday of the Buddha", "H"],
+    ["2027-05-14", "2027-05-14", "Discretionary Holiday", "H"],
+    ["2027-06-01", "2027-06-01", "Staff Development Day", "S"],
+    ["2027-06-02", "2027-06-21", "S.4–S.5 Yearly Exam", "E", true],
+    ["2027-06-07", "2027-06-21", "S.1–S.3 Yearly Exam", "E", true],
+    ["2027-06-09", "2027-06-09", "Tuen Ng Festival", "H"],
+    ["2027-06-17", "2027-06-18", "S.3 TSA (Written)", "E"],
+    ["2027-06-22", "2027-06-25", "S.1–S.5 going over exam papers", "S"],
+    ["2027-06-23", "2027-06-23", "S.3 TSA (Written) fallback date", "E"],
+    ["2027-06-28", "2027-07-09", "Post-examination activities", "A", true],
+    ["2027-06-29", "2027-06-29", "Graduation Day", "S"],
+    ["2027-06-30", "2027-06-30", "Graduation Day fallback date", "S"],
+    ["2027-07-01", "2027-07-01", "HKSAR Establishment Day", "H"],
+    ["2027-07-02", "2027-07-02", "Mark Checking", "S"],
+    ["2027-07-06", "2027-07-06", "Promotion Meeting", "S"],
+    ["2027-07-08", "2027-07-09", "S.1 Registration", "S"],
+    ["2027-07-12", "2027-07-12", "Last Day of School", "S"],
+    ["2027-07-13", "2027-08-31", "Summer vacation", "H"],
+    ["2027-07-13", "2027-07-13", "Pre-S.1 Attainment Test", "S"],
+    ["2027-07-14", "2027-07-14", "Release of HKDSE results", "S"]
+  ]
+};
+
 // For a school whose calendar hasn't been added yet: Monday to Friday, no holidays.
 var OTHER_SCHOOL = {
   id: "other",
@@ -397,7 +509,7 @@ var OTHER_SCHOOL = {
   periods: STANDARD_PERIODS
 };
 
-var SCHOOL_SPECS = [KINGS_COLLEGE_2026, OTHER_SCHOOL];
+var SCHOOL_SPECS = [KINGS_COLLEGE_2026, KTGSS_2026, OTHER_SCHOOL];
 var DEFAULT_SCHOOL_ID = OTHER_SCHOOL.id;
 
 function listSchools_() {
@@ -648,21 +760,33 @@ var TABS = {
 var NUMBER_FIELDS = { day: true, repeatOn: true };
 var BOOLEAN_FIELDS = { done: true, replaces: true };
 
+// The owner's Sheet keeps the original property name, so existing data is found unchanged.
+function sheetIdKeyFor_(notebook) {
+  return notebook.owner ? SHEET_ID_KEY : SHEET_ID_KEY + ":" + notebook.id;
+}
+
+// Notebooks that have been opened at least once (so checking them never creates a Sheet).
+function notebooksWithData_() {
+  var props = PropertiesService.getScriptProperties();
+  return allNotebooks_().filter(function (nb) { return !!props.getProperty(sheetIdKeyFor_(nb)); });
+}
+
 function book_() {
   var props = PropertiesService.getScriptProperties();
-  var id = props.getProperty(SHEET_ID_KEY);
+  var idKey = sheetIdKeyFor_(currentNotebook_);
+  var id = props.getProperty(idKey);
   if (id) {
     var opened = openDataSheet_(id);
     if (opened) return opened;
   }
-  // Creating is done under the user's lock, so two pages opened at once can't make two sheets.
+  // Creating is done under the script lock, so two pages opened at once can't make two sheets.
   var lock = LockService.getScriptLock();
   var hadLock = lock.hasLock();
   if (!hadLock) lock.waitLock(20000);
   try {
-    var again = props.getProperty(SHEET_ID_KEY);
-    if (again && again !== id) return openDataSheet_(again) || createDataSheet_(props);
-    return createDataSheet_(props);
+    var again = props.getProperty(idKey);
+    if (again && again !== id) return openDataSheet_(again) || createDataSheet_(props, idKey);
+    return createDataSheet_(props, idKey);
   } finally {
     if (!hadLock) lock.releaseLock();
   }
@@ -685,13 +809,14 @@ function openDataSheet_(id) {
   }
 }
 
-function createDataSheet_(props) {
-  var book = SpreadsheetApp.create(DATA_FILE_NAME);
-  Object.keys(TABS).forEach(function (name, i) {
-    var sheet = i === 0 ? book.getSheets()[0].setName(name) : book.insertSheet(name);
-    addHeaders_(sheet, name);
+function createDataSheet_(props, idKey) {
+  var name = currentNotebook_.owner ? DATA_FILE_NAME : DATA_FILE_NAME + " – " + currentNotebook_.name;
+  var book = SpreadsheetApp.create(name);
+  Object.keys(TABS).forEach(function (tabName, i) {
+    var sheet = i === 0 ? book.getSheets()[0].setName(tabName) : book.insertSheet(tabName);
+    addHeaders_(sheet, tabName);
   });
-  props.setProperty(SHEET_ID_KEY, book.getId());
+  props.setProperty(idKey, book.getId());
   return book;
 }
 
@@ -812,11 +937,26 @@ function dataSheetUrl_() {
    Works like CLY English: deployed to run as its owner, open to anyone, no sign-in. Every request is a
    POST of {action, key, args} sent as text/plain (so the browser skips the CORS preflight Apps Script
    can't answer). The key is the secret code from the owner's personal link; without it, nothing is
-   read or written. Notes live in a Google Sheet in the owner's Drive (Store.gs). Setup: README.md. */
+   read or written. Notes live in a Google Sheet in the owner's Drive (Store.gs). Setup: README.md.
+
+   Other teachers can have their own notebook on the same deployment (addTeacher below): each gets
+   their own secret link and their own Sheet, also in the owner's Drive. The key picks the notebook. */
 
 var APP_NAME = "Teachers' Second Brain";
 var SITE_URL = "https://cly82723.github.io/second-brain/";
 var ACCESS_KEY_PROP = "ACCESS_KEY";
+var NOTEBOOKS_PROP = "NOTEBOOKS";
+var OWNER_NOTEBOOK = { id: "owner", name: "", email: "", owner: true };
+var EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Whose notebook this request is for. Apps Script starts every request fresh, so this never leaks
+// from one request into another. Functions run from the editor or a trigger start on the owner's.
+var currentNotebook_ = OWNER_NOTEBOOK;
+
+// To give another teacher their own notebook: fill in their name (and email, for the evening
+// email), select addTeacher in the toolbar, press Run, and send them the link it logs.
+// Running it again with the same name shows the same link (and updates the email).
+var NEW_TEACHER = { name: "", email: "" };
 
 // What the page may ask for. Each returns {ok, data} or {ok: false, error}.
 function actionFor_(name) {
@@ -838,9 +978,11 @@ function doPost(e) {
   } catch (err) {
     return json_({ ok: false, error: "That request didn't make sense. Please reload the page." });
   }
-  if (!keyMatches_(body.key)) {
+  var notebook = notebookForKey_(body.key);
+  if (!notebook) {
     return json_({ ok: false, locked: true, error: "This notebook is private. Open your personal link to use it on this device." });
   }
+  currentNotebook_ = notebook;
   var action = actionFor_(body.action);
   if (!action) return json_({ ok: false, error: "Unknown request. Please reload the page." });
   var args = Array.isArray(body.args) ? body.args : [];
@@ -849,13 +991,104 @@ function doPost(e) {
 
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 
-// Compares in constant time, so the code can't be guessed a character at a time.
-function keyMatches_(given) {
-  var key = PropertiesService.getScriptProperties().getProperty(ACCESS_KEY_PROP);
-  if (!key || typeof given !== "string" || given.length !== key.length) return false;
+// The owner's code, or one of the other teachers' codes. Every code is checked, so the time taken
+// doesn't reveal which one (if any) came close.
+function notebookForKey_(given) {
+  var found = null;
+  if (sameKey_(PropertiesService.getScriptProperties().getProperty(ACCESS_KEY_PROP), given)) found = OWNER_NOTEBOOK;
+  readNotebooks_().forEach(function (nb) { if (sameKey_(nb.key, given)) found = guestNotebook_(nb); });
+  return found;
+}
+
+// Compares in constant time, so a code can't be guessed a character at a time.
+function sameKey_(key, given) {
+  if (!key || typeof key !== "string" || typeof given !== "string" || given.length !== key.length) return false;
   var diff = 0;
   for (var i = 0; i < key.length; i++) diff |= key.charCodeAt(i) ^ given.charCodeAt(i);
   return diff === 0;
+}
+
+// The other teachers, kept in the script's properties as [{id, name, email, key}].
+// Reading for a request, a damaged list just refuses the other teachers' links. Reading in order to
+// change it (strict), it stops instead, so a typo can never be saved over everyone's links.
+function readNotebooks_(strict) {
+  var raw = PropertiesService.getScriptProperties().getProperty(NOTEBOOKS_PROP);
+  if (!raw) return [];
+  var list = null;
+  try { list = JSON.parse(raw); } catch (e) { list = null; }
+  if (!Array.isArray(list)) {
+    if (strict) throw new Error("The NOTEBOOKS script property is damaged. Fix it in Project Settings → Script properties first; nothing was changed.");
+    console.error("The NOTEBOOKS script property is damaged, so other teachers' links are refused until it's fixed.");
+    return [];
+  }
+  return strict ? list : list.filter(function (nb) { return nb && typeof nb.id === "string" && typeof nb.key === "string"; });
+}
+
+// What a request knows about a notebook: never its key.
+function guestNotebook_(nb) {
+  return { id: nb.id, name: nb.name || "", email: nb.email || "", owner: false };
+}
+
+function allNotebooks_() {
+  return [OWNER_NOTEBOOK].concat(readNotebooks_().map(guestNotebook_));
+}
+
+// Runs work as if the request had come from that notebook's link.
+function withNotebook_(notebook, work) {
+  var previous = currentNotebook_;
+  currentNotebook_ = notebook;
+  try {
+    return work();
+  } finally {
+    currentNotebook_ = previous;
+  }
+}
+
+// Where this notebook's evening email goes: the owner's own address, or the one given in addTeacher.
+function recipient_() {
+  return currentNotebook_.owner ? Session.getEffectiveUser().getEmail() : currentNotebook_.email;
+}
+
+// Run from the editor after filling in NEW_TEACHER above.
+function addTeacher() {
+  var link = addNotebook_(NEW_TEACHER.name, NEW_TEACHER.email);
+  console.log("Personal link for " + String(NEW_TEACHER.name).trim() + " (send it only to them): " + link);
+  return link;
+}
+
+function addNotebook_(name, email) {
+  var cleanName = String(name || "").trim();
+  var cleanEmail = String(email || "").trim();
+  if (!cleanName) throw new Error("Fill in NEW_TEACHER's name first (near the top of the Code.gs part), then run addTeacher again.");
+  if (cleanName.length > 60) throw new Error("NEW_TEACHER's name is too long (60 characters at most).");
+  if (cleanEmail && !EMAIL_PATTERN.test(cleanEmail)) throw new Error("NEW_TEACHER's email doesn't look like an email address.");
+  return withLock_(function () {
+    var list = readNotebooks_(true);
+    var existing = list.filter(function (nb) { return String(nb.name).toLowerCase() === cleanName.toLowerCase(); })[0];
+    var updated;
+    if (existing) {
+      updated = list.map(function (nb) { return nb === existing && cleanEmail ? Object.assign({}, nb, { email: cleanEmail }) : nb; });
+    } else {
+      existing = { id: "t" + Utilities.getUuid().replace(/-/g, "").slice(0, 12), name: cleanName, email: cleanEmail, key: newAccessKey_() };
+      updated = list.concat([existing]);
+    }
+    PropertiesService.getScriptProperties().setProperty(NOTEBOOKS_PROP, JSON.stringify(updated));
+    return SITE_URL + "#k=" + existing.key;
+  });
+}
+
+// Run from the editor to see every other teacher's personal link again.
+function listTeachers() {
+  var list = readNotebooks_(true);
+  if (!list.length) console.log("No other teachers yet. Fill in NEW_TEACHER and run addTeacher.");
+  list.forEach(function (nb) {
+    console.log(nb.name + (nb.email ? " <" + nb.email + ">" : " (no email)") + ": " + SITE_URL + "#k=" + nb.key);
+  });
+  return list.map(function (nb) { return { name: nb.name, email: nb.email || "", link: SITE_URL + "#k=" + nb.key }; });
+}
+
+function newAccessKey_() {
+  return (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, "");
 }
 
 // Run once from the editor (select createAccessKey, press Run): makes the secret code and logs your
@@ -865,7 +1098,7 @@ function createAccessKey() {
   var props = PropertiesService.getScriptProperties();
   var key = props.getProperty(ACCESS_KEY_PROP);
   if (!key) {
-    key = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, "");
+    key = newAccessKey_();
     props.setProperty(ACCESS_KEY_PROP, key);
   }
   var link = SITE_URL + "#k=" + key;
@@ -904,7 +1137,8 @@ function allData_() {
   var schoolId = schoolSpec_(settings.schoolId) ? settings.schoolId : DEFAULT_SCHOOL_ID;
   var spec = schoolSpec_(schoolId);
   return {
-    email: Session.getEffectiveUser().getEmail(),
+    email: recipient_(),
+    owner: currentNotebook_.owner,
     today: today_(),
     schools: listSchools_(),
     colours: CLASS_COLOURS,
@@ -941,7 +1175,10 @@ function getAll() {
 }
 
 function getDataSheetUrl() {
-  return respond_(function () { return { url: dataSheetUrl_() }; });
+  return respond_(function () {
+    if (!currentNotebook_.owner) throw new UserError_("Your notes are kept in a Google Sheet looked after by the person who set up this app. Ask them if you need a copy.");
+    return { url: dataSheetUrl_() };
+  });
 }
 
 // School, periods, classes and timetable, all saved together.
@@ -1147,10 +1384,11 @@ function planMerge_(tab, keyOf, incoming, clean, maxTotal) {
 }
 
 // ===== apps-script/Email.gs =====
-/* The evening round-up email. Each teacher who turns it on gets a daily trigger that runs as them,
-   so it reads only their own Sheet and sends only to their own address. */
+/* The evening round-up email. One hourly trigger (running as the owner) looks at every notebook
+   and emails each one whose chosen hour it is, to that notebook's own address (recipient_). */
 
 var DIGEST_HANDLER = "dailyDigest";
+var NO_ADDRESS = "There's no email address for this notebook yet. Ask the person who set up the app to add one.";
 
 function saveEmail(request) {
   return respond_(function () {
@@ -1158,35 +1396,68 @@ function saveEmail(request) {
       var on = !!(request && request.on);
       var hour = Number(request && request.hour);
       if (EMAIL_HOURS.indexOf(hour) < 0) throw new UserError_("Please pick a time between 4 pm and 11 pm.");
-      removeDigestTriggers_();
-      if (on) ScriptApp.newTrigger(DIGEST_HANDLER).timeBased().everyDays(1).atHour(hour).create();
-      var email = { on: on, hour: hour };
+      if (on && !recipient_()) throw new UserError_(NO_ADDRESS);
+      // Keeps the day it was last sent, so saving again after tonight's email doesn't send a second.
+      var previous = readSettings_().email || {};
+      var email = { on: on, hour: hour, lastSent: previous.lastSent || "" };
       writeSetting_("email", email);
+      syncDigestTrigger_();
       return { email: email };
     });
   });
 }
 
-function removeDigestTriggers_() {
+// Exactly one hourly trigger while anyone has the email on; none otherwise.
+function syncDigestTrigger_() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === DIGEST_HANDLER) ScriptApp.deleteTrigger(t);
   });
+  if (anyEmailOn_()) ScriptApp.newTrigger(DIGEST_HANDLER).timeBased().everyHours(1).create();
 }
 
-// Run by the daily trigger. Sends nothing when tomorrow has nothing on.
+// A notebook that can't be read just now counts as on, so nobody's email is switched off by a hiccup.
+function anyEmailOn_() {
+  return notebooksWithData_().some(function (nb) {
+    try {
+      return withNotebook_(nb, function () { var e = readSettings_().email; return !!(e && e.on); });
+    } catch (e) {
+      console.warn("Couldn't check the evening email setting for " + (nb.name || "the owner") + ": " + (e && e.message || e));
+      return true;
+    }
+  });
+}
+
+// Run by the hourly trigger. Each notebook is dealt with once a day, at the first run on or after its
+// chosen hour (so a skipped trigger run only makes it later, never lost), and an email goes out only
+// when tomorrow has something on. One notebook failing doesn't stop the others.
 function dailyDigest() {
+  var hour = Number(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "HH:mm").slice(0, 2));
+  notebooksWithData_().forEach(function (nb) {
+    try {
+      withNotebook_(nb, function () { withLock_(function () { sendDigestIfDue_(hour); }); });
+    } catch (e) {
+      console.error("Evening email for " + (nb.name || "the owner") + " failed: " + (e && e.stack ? e.stack : e));
+    }
+  });
+}
+
+function sendDigestIfDue_(hour) {
   var settings = readSettings_();
-  if (!settings.email || !settings.email.on) return;
+  var email = settings.email;
+  var today = today_();
+  if (!email || !email.on || hour < Number(email.hour) || email.lastSent === today || !recipient_()) return;
   var ctx = context_();
-  var digest = logic_().digest(ctx, today_(), settings.startDate || "");
+  var digest = logic_().digest(ctx, today, settings.startDate || "");
   if (digest) sendDigest_(ctx, digest);
+  writeSetting_("email", Object.assign({}, email, { lastSent: today }));
 }
 
 function sendTestEmail() {
   return respond_(function () {
+    var to = recipient_();
+    if (!to) throw new UserError_(NO_ADDRESS);
     var ctx = context_();
     var digest = logic_().digest(ctx, today_(), readSettings_().startDate || "");
-    var to = ownerEmail_();
     if (!digest) {
       MailApp.sendEmail({ to: to, subject: APP_NAME + ": test email", name: APP_NAME,
         body: "Your evening email works. Tomorrow has nothing on, so on a real evening like this one no email would be sent." });
@@ -1199,12 +1470,7 @@ function sendTestEmail() {
 
 function sendDigest_(ctx, digest) {
   var mail = digestEmail_(ctx, digest, appUrl_());
-  MailApp.sendEmail({ to: ownerEmail_(), subject: mail.subject, htmlBody: mail.html, body: mail.text, name: APP_NAME });
-}
-
-// In a trigger, getActiveUser can come back empty; the trigger always runs as its owner, the effective user.
-function ownerEmail_() {
-  return Session.getEffectiveUser().getEmail();
+  MailApp.sendEmail({ to: recipient_(), subject: mail.subject, htmlBody: mail.html, body: mail.text, name: APP_NAME });
 }
 
 // The plain site address, without the secret code: a forwarded email doesn't hand over access.

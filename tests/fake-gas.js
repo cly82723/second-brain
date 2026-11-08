@@ -92,6 +92,7 @@ function loadServer(options = {}) {
         const spec = { handler };
         const builder = {
           timeBased: () => builder, everyDays: (n) => { spec.everyDays = n; return builder; },
+          everyHours: (n) => { spec.everyHours = n; return builder; },
           atHour: (h) => { spec.hour = h; return builder; },
           create: () => { const t = Object.assign({ getHandlerFunction: () => handler }, spec); triggers.push(t); return t; }
         };
@@ -112,7 +113,8 @@ function loadServer(options = {}) {
   return {
     ctx, books, triggers, sent, props,
     setNow: (ms) => { clock = ms; },
-    book: () => books[props.dataSheetId],
+    // The owner's data sheet, or another teacher's by their notebook id.
+    book: (notebookId) => books[props[notebookId ? "dataSheetId:" + notebookId : "dataSheetId"]],
     // Calls an action directly, as doPost would after checking the key.
     call: (name, ...args) => plain(ctx[name](...plain(args))),
     // A request exactly as the page sends it.

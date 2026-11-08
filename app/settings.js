@@ -336,9 +336,15 @@ function dataPanel() {
     App.data = null;
     showLocked("This device was forgotten. Your notes are still safe.");
   } }, "Forget this device");
-  holder.append(open, copy, forget);
+  // Older web app versions don't send `owner`; treat that as the owner's notebook.
+  var isOwner = App.data.owner !== false;
+  if (isOwner) holder.append(open);
+  holder.append(copy, forget);
+  var where = isOwner
+    ? "Your notes are saved in a Google Sheet in your Drive" + (App.data.email ? " (" + App.data.email + ")" : "")
+    : "Your notes are saved in a Google Sheet kept by the person who set up this app";
   return panel("Your data", null, [
-    el("p", { class: "hint", style: "margin-top:0" }, "Your notes are saved in a Google Sheet in your Drive" + (App.data.email ? " (" + App.data.email + ")" : "") +
+    el("p", { class: "hint", style: "margin-top:0" }, where +
       ". Use your personal link to open the app on another device: keep it private, as anyone with it can open your notebook."),
     holder
   ]);

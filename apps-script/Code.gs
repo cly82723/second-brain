@@ -2,11 +2,26 @@
    Works like CLY English: deployed to run as its owner, open to anyone, no sign-in. Every request is a
    POST of {action, key, args} sent as text/plain (so the browser skips the CORS preflight Apps Script
    can't answer). The key is the secret code from the owner's personal link; without it, nothing is
-   read or written. Notes live in a Google Sheet in the owner's Drive (Store.gs). Setup: README.md. */
+   read or written. Notes live in a Google Sheet in the owner's Drive (Store.gs). Setup: README.md.
+
+   Other teachers can have their own notebook on the same deployment (addTeacher below): each gets
+   their own secret link and their own Sheet, also in the owner's Drive. The key picks the notebook. */
 
 var APP_NAME = "Teachers' Second Brain";
 var SITE_URL = "https://cly82723.github.io/second-brain/";
 var ACCESS_KEY_PROP = "ACCESS_KEY";
+var NOTEBOOKS_PROP = "NOTEBOOKS";
+var OWNER_NOTEBOOK = { id: "owner", name: "", email: "", owner: true };
+var EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Whose notebook this request is for. Apps Script starts every request fresh, so this never leaks
+// from one request into another. Functions run from the editor or a trigger start on the owner's.
+var currentNotebook_ = OWNER_NOTEBOOK;
+
+// To give another teacher their own notebook: fill in their name (and email, for the evening
+// email), select addTeacher in the toolbar, press Run, and send them the link it logs.
+// Running it again with the same name shows the same link (and updates the email).
+var NEW_TEACHER = { name: "", email: "" };
 
 // What the page may ask for. Each returns {ok, data} or {ok: false, error}.
 function actionFor_(name) {
@@ -28,9 +43,11 @@ function doPost(e) {
   } catch (err) {
     return json_({ ok: false, error: "That request didn't make sense. Please reload the page." });
   }
-  if (!keyMatches_(body.key)) {
+  var notebook = notebookForKey_(body.key);
+  if (!notebook) {
     return json_({ ok: false, locked: true, error: "This notebook is private. Open your personal link to use it on this device." });
   }
+  currentNotebook_ = notebook;
   var action = actionFor_(body.action);
   if (!action) return json_({ ok: false, error: "Unknown request. Please reload the page." });
   var args = Array.isArray(body.args) ? body.args : [];
@@ -39,13 +56,104 @@ function doPost(e) {
 
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 
-// Compares in constant time, so the code can't be guessed a character at a time.
-function keyMatches_(given) {
-  var key = PropertiesService.getScriptProperties().getProperty(ACCESS_KEY_PROP);
-  if (!key || typeof given !== "string" || given.length !== key.length) return false;
+// The owner's code, or one of the other teachers' codes. Every code is checked, so the time taken
+// doesn't reveal which one (if any) came close.
+function notebookForKey_(given) {
+  var found = null;
+  if (sameKey_(PropertiesService.getScriptProperties().getProperty(ACCESS_KEY_PROP), given)) found = OWNER_NOTEBOOK;
+  readNotebooks_().forEach(function (nb) { if (sameKey_(nb.key, given)) found = guestNotebook_(nb); });
+  return found;
+}
+
+// Compares in constant time, so a code can't be guessed a character at a time.
+function sameKey_(key, given) {
+  if (!key || typeof key !== "string" || typeof given !== "string" || given.length !== key.length) return false;
   var diff = 0;
   for (var i = 0; i < key.length; i++) diff |= key.charCodeAt(i) ^ given.charCodeAt(i);
   return diff === 0;
+}
+
+// The other teachers, kept in the script's properties as [{id, name, email, key}].
+// Reading for a request, a damaged list just refuses the other teachers' links. Reading in order to
+// change it (strict), it stops instead, so a typo can never be saved over everyone's links.
+function readNotebooks_(strict) {
+  var raw = PropertiesService.getScriptProperties().getProperty(NOTEBOOKS_PROP);
+  if (!raw) return [];
+  var list = null;
+  try { list = JSON.parse(raw); } catch (e) { list = null; }
+  if (!Array.isArray(list)) {
+    if (strict) throw new Error("The NOTEBOOKS script property is damaged. Fix it in Project Settings → Script properties first; nothing was changed.");
+    console.error("The NOTEBOOKS script property is damaged, so other teachers' links are refused until it's fixed.");
+    return [];
+  }
+  return strict ? list : list.filter(function (nb) { return nb && typeof nb.id === "string" && typeof nb.key === "string"; });
+}
+
+// What a request knows about a notebook: never its key.
+function guestNotebook_(nb) {
+  return { id: nb.id, name: nb.name || "", email: nb.email || "", owner: false };
+}
+
+function allNotebooks_() {
+  return [OWNER_NOTEBOOK].concat(readNotebooks_().map(guestNotebook_));
+}
+
+// Runs work as if the request had come from that notebook's link.
+function withNotebook_(notebook, work) {
+  var previous = currentNotebook_;
+  currentNotebook_ = notebook;
+  try {
+    return work();
+  } finally {
+    currentNotebook_ = previous;
+  }
+}
+
+// Where this notebook's evening email goes: the owner's own address, or the one given in addTeacher.
+function recipient_() {
+  return currentNotebook_.owner ? Session.getEffectiveUser().getEmail() : currentNotebook_.email;
+}
+
+// Run from the editor after filling in NEW_TEACHER above.
+function addTeacher() {
+  var link = addNotebook_(NEW_TEACHER.name, NEW_TEACHER.email);
+  console.log("Personal link for " + String(NEW_TEACHER.name).trim() + " (send it only to them): " + link);
+  return link;
+}
+
+function addNotebook_(name, email) {
+  var cleanName = String(name || "").trim();
+  var cleanEmail = String(email || "").trim();
+  if (!cleanName) throw new Error("Fill in NEW_TEACHER's name first (near the top of the Code.gs part), then run addTeacher again.");
+  if (cleanName.length > 60) throw new Error("NEW_TEACHER's name is too long (60 characters at most).");
+  if (cleanEmail && !EMAIL_PATTERN.test(cleanEmail)) throw new Error("NEW_TEACHER's email doesn't look like an email address.");
+  return withLock_(function () {
+    var list = readNotebooks_(true);
+    var existing = list.filter(function (nb) { return String(nb.name).toLowerCase() === cleanName.toLowerCase(); })[0];
+    var updated;
+    if (existing) {
+      updated = list.map(function (nb) { return nb === existing && cleanEmail ? Object.assign({}, nb, { email: cleanEmail }) : nb; });
+    } else {
+      existing = { id: "t" + Utilities.getUuid().replace(/-/g, "").slice(0, 12), name: cleanName, email: cleanEmail, key: newAccessKey_() };
+      updated = list.concat([existing]);
+    }
+    PropertiesService.getScriptProperties().setProperty(NOTEBOOKS_PROP, JSON.stringify(updated));
+    return SITE_URL + "#k=" + existing.key;
+  });
+}
+
+// Run from the editor to see every other teacher's personal link again.
+function listTeachers() {
+  var list = readNotebooks_(true);
+  if (!list.length) console.log("No other teachers yet. Fill in NEW_TEACHER and run addTeacher.");
+  list.forEach(function (nb) {
+    console.log(nb.name + (nb.email ? " <" + nb.email + ">" : " (no email)") + ": " + SITE_URL + "#k=" + nb.key);
+  });
+  return list.map(function (nb) { return { name: nb.name, email: nb.email || "", link: SITE_URL + "#k=" + nb.key }; });
+}
+
+function newAccessKey_() {
+  return (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, "");
 }
 
 // Run once from the editor (select createAccessKey, press Run): makes the secret code and logs your
@@ -55,7 +163,7 @@ function createAccessKey() {
   var props = PropertiesService.getScriptProperties();
   var key = props.getProperty(ACCESS_KEY_PROP);
   if (!key) {
-    key = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, "");
+    key = newAccessKey_();
     props.setProperty(ACCESS_KEY_PROP, key);
   }
   var link = SITE_URL + "#k=" + key;
@@ -94,7 +202,8 @@ function allData_() {
   var schoolId = schoolSpec_(settings.schoolId) ? settings.schoolId : DEFAULT_SCHOOL_ID;
   var spec = schoolSpec_(schoolId);
   return {
-    email: Session.getEffectiveUser().getEmail(),
+    email: recipient_(),
+    owner: currentNotebook_.owner,
     today: today_(),
     schools: listSchools_(),
     colours: CLASS_COLOURS,
@@ -131,7 +240,10 @@ function getAll() {
 }
 
 function getDataSheetUrl() {
-  return respond_(function () { return { url: dataSheetUrl_() }; });
+  return respond_(function () {
+    if (!currentNotebook_.owner) throw new UserError_("Your notes are kept in a Google Sheet looked after by the person who set up this app. Ask them if you need a copy.");
+    return { url: dataSheetUrl_() };
+  });
 }
 
 // School, periods, classes and timetable, all saved together.
