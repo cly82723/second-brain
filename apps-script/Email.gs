@@ -118,6 +118,12 @@ function digestEmail_(ctx, d, url) {
       var when = ev.allDay ? "All day" : ev.start + (ev.end ? "–" + ev.end : "");
       return { title: ev.title, meta: when + (ev.replaces ? " · replaces lessons" : ""), lines: ev.notes ? [["Notes", ev.notes]] : [] };
     })),
+    section_("Marking due", d.marksDue.concat(d.overdueMarks).map(function (m) {
+      var p = L.markProgress(m);
+      var cls = m.classId && ctx.classById[m.classId];
+      return { title: m.title, meta: [cls ? cls.name : "", m.due < d.date ? "overdue, was due " + L.shortDate(m.due) : "",
+        p.total ? p.marked + " of " + p.total + " marked" : ""].filter(Boolean).join(" · ") };
+    })),
     section_("To-dos due tomorrow", d.todosDue.map(function (t) { return { title: t.title, meta: t.time || "" }; })),
     section_("Overdue to-dos", d.overdue.map(function (t) { return { title: t.title, meta: "was due " + L.shortDate(t.due) }; }))
   ].filter(Boolean);
@@ -135,6 +141,8 @@ function lessonItem_(l) {
   var e = l.entry || {};
   var lines = [];
   if (l.replacedBy) lines.push(["Replaced by", l.replacedBy.title]);
+  (l.followUps || []).forEach(function (f) { lines.push(["Follow up (from " + logic_().shortDate(f.date) + ")", f.followUp]); });
+  (l.collect || []).forEach(function (h) { lines.push(["Collect", h.homework + " (set " + logic_().shortDate(h.date) + ")"]); });
   if (e.plan) lines.push(["Plan", e.plan]);
   if (e.remind) lines.push(["Remind students", e.remind]);
   if (e.homework) lines.push(["Homework to give", e.homework + (e.homeworkDue ? " (due " + logic_().shortDate(e.homeworkDue) + ")" : "")]);

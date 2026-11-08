@@ -8,7 +8,7 @@ const zlib = require("zlib");
 const SCHOOL_ID = "kings-college-2026";
 const DONE_UP_TO = "2026-11-04"; // entries up to here are past lessons, ticked as done
 const CLASSES = [
-  { id: "c-1b-eng", name: "1B English", colour: "sky" },
+  { id: "c-1b-eng", name: "S1E2 English", colour: "sky" },
   { id: "c-3d-eng", name: "3D English", colour: "sage" },
   { id: "c-5d-eng", name: "5D English", colour: "apricot" },
   { id: "c-1d-hist", name: "1D History", colour: "lilac" },

@@ -20,6 +20,10 @@ function fakeRange(sheet, row, col, numRows, numCols) {
     },
     getValues: () => Array.from({ length: numRows }, (_, i) =>
       Array.from({ length: numCols }, (_, j) => { const v = (sheet.rows[row - 1 + i] || [])[col - 1 + j]; return v === undefined ? "" : v; })),
+    // A cell holding a string that starts with "=" stands for a formula.
+    getFormulas: () => range.getValues().map((r) => r.map((v) => (typeof v === "string" && v.startsWith("=") ? v : ""))),
+    setValue(v) { return range.setValues([[v]]); },
+    setNumberFormat() { return range; },
     setFontWeight: () => range
   };
   return range;
@@ -112,6 +116,8 @@ function loadServer(options = {}) {
   const plain = (x) => JSON.parse(JSON.stringify(x));
   return {
     ctx, books, triggers, sent, props,
+    // A spreadsheet that exists in the owner's Drive already (e.g. a teacher's scoresheet).
+    addBook: (id, name) => (books[id] = fakeBook(id, name)),
     setNow: (ms) => { clock = ms; },
     // The owner's data sheet, or another teacher's by their notebook id.
     book: (notebookId) => books[props[notebookId ? "dataSheetId:" + notebookId : "dataSheetId"]],

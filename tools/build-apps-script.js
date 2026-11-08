@@ -6,7 +6,7 @@ const path = require("path");
 
 const ROOT = path.join(__dirname, "..");
 const PARTS = ["core/logic.js", "apps-script/Schools.gs", "apps-script/Validate.gs", "apps-script/Store.gs",
-  "apps-script/Code.gs", "apps-script/Import.gs", "apps-script/Email.gs"];
+  "apps-script/Code.gs", "apps-script/Import.gs", "apps-script/Email.gs", "apps-script/Marking.gs"];
 const DIST = path.join(ROOT, "apps-script/dist");
 
 function buildCode() {

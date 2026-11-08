@@ -36,8 +36,10 @@ function openLessonEditor(date, classId) {
   var info = L.dayInfo(App.ctx.school, date);
   var key = date + "|" + classId;
 
-  var plan = textArea(e.plan, 4);
+  var plan = textArea(e.plan, 3);
   plan.setAttribute("data-autofocus", "");
+  var covered = textArea(e.covered, 3);
+  var followUp = textArea(e.followUp, 2);
   var remind = textArea(e.remind, 2);
   var homework = textInput(e.homework, { maxlength: "4000", placeholder: "e.g. GB p. 48, 51" });
   var due = el("input", { class: "input", type: "date", value: e.homeworkDue || "", style: "max-width:180px" });
@@ -47,7 +49,10 @@ function openLessonEditor(date, classId) {
   doneBox.addEventListener("change", function () { doneRow.classList.toggle("is-on", doneBox.checked); });
 
   function collect() {
-    return { date: date, classId: classId, plan: plan.value, remind: remind.value, homework: homework.value, homeworkDue: due.value, notes: notes.value, done: doneBox.checked };
+    return { date: date, classId: classId, plan: plan.value, covered: covered.value, followUp: followUp.value,
+      // Rewriting a follow-up that was already ticked makes it a new one to do.
+      followUpDone: !!e.followUpDone && followUp.value.trim() === (e.followUp || "").trim(),
+      remind: remind.value, homework: homework.value, homeworkDue: due.value, notes: notes.value, done: doneBox.checked };
   }
   var initial = JSON.stringify(collect());
   guardDirty(function () { return JSON.stringify(collect()) !== initial; });
@@ -69,8 +74,11 @@ function openLessonEditor(date, classId) {
   var body = [
     lesson && lesson.replacedBy ? el("div", { class: "notice notice-stripe" }, "This lesson is replaced by “" + lesson.replacedBy.title + "”. You can still keep notes here.") : null,
     !lesson ? el("div", { class: "notice notice-warn" }, cls.name + " isn't on your timetable that day. This entry is kept in the class's record.") : null,
+    lesson ? carriedBox(lesson) : null,
     prev ? previousSummary(prev) : null,
-    field("Plan / what we covered", plan),
+    field("Plan", plan, "· before the lesson"),
+    field("Covered", covered, "· what you actually did"),
+    field("Follow up next lesson", followUp, next ? "· shows on " + L.shortDate(next.date) + " until you tick it" : ""),
     field("Remind students", remind, "· in this lesson"),
     field("Homework to give", homework),
     field("Homework due", dueRow),
@@ -93,9 +101,31 @@ function openLessonEditor(date, classId) {
   saveShortcut(drawer, save);
 }
 
+// What this lesson picks up from earlier ones, each follow-up with its own "Done" tick.
+function carriedBox(lesson) {
+  if (!lesson.followUps.length && !lesson.collect.length && !lesson.chase.length) return null;
+  var rows = lesson.followUps.map(function (f) {
+    var tick = el("input", { type: "checkbox", "aria-label": "Followed up" });
+    tick.addEventListener("change", function () {
+      tick.disabled = true;
+      api("saveLog", Object.assign({}, f, { followUpDone: true })).then(function (res) {
+        applyLog(res.entry, logKey(f));
+        toast("Followed up.");
+      }, function (err) { tick.disabled = false; tick.checked = false; fail(err); });
+    });
+    return el("li", { class: "carry-row" }, [el("label", { class: "check" }, [tick, el("span", {}, [el("b", {}, "Follow up "), "(from " + L.shortDate(f.date) + "): " + f.followUp])])]);
+  }).concat(lesson.collect.map(function (h) {
+    return el("li", { class: "carry-row" }, [el("b", {}, "Collect: "), h.homework + " (set " + L.shortDate(h.date) + ")"]);
+  })).concat(lesson.chase.map(function (c) {
+    return el("li", { class: "carry-row" }, el("button", { type: "button", class: "link-row", onclick: function () { openMarkEditor(c.mark); } },
+      [el("b", {}, "Chase: "), c.mark.title + " · " + c.names.join(", ")]));
+  }));
+  return el("div", { class: "notice notice-carry" }, [el("div", { class: "label" }, "From earlier"), el("ul", { class: "list" }, rows)]);
+}
+
 function previousSummary(prev) {
   var pe = prev.entry || {};
-  var lines = [pe.plan, pe.homework ? "Homework: " + pe.homework : "", pe.remind ? "Reminded: " + pe.remind : ""].filter(Boolean).join("\n");
+  var lines = [pe.plan ? "Plan: " + pe.plan : "", pe.covered ? "Covered: " + pe.covered : "", pe.homework ? "Homework: " + pe.homework : "", pe.remind ? "Reminded: " + pe.remind : ""].filter(Boolean).join("\n");
   return el("details", { class: "prev-lesson", open: lines ? true : null }, [
     el("summary", {}, "Last lesson · " + L.shortDate(prev.date)),
     el("p", {}, lines || "Nothing was written for that lesson.")
@@ -107,7 +137,7 @@ function carryForwardBox(collect, next, key) {
   var leftover = textArea("", 2);
   var moveBtn = el("button", { type: "button", class: "btn btn-ink btn-sm" }, next ? "Move to " + L.shortDate(next.date) : "Move");
   var node = el("div", { class: "carry", hidden: true }, [
-    field("What's left to do?", leftover, "· goes to the top of the next lesson's plan"),
+    field("What's left to do?", leftover, "· added to Follow up, shown at the next lesson"),
     moveBtn
   ]);
   moveBtn.addEventListener("click", function () {
@@ -115,11 +145,8 @@ function carryForwardBox(collect, next, key) {
     busy(moveBtn, api("carryForward", { entry: collect(), leftover: leftover.value })).then(function (res) {
       App.guardClose = null;
       closeLayer();
-      var log = App.data.log.filter(function (x) {
-        return logKey(x) !== key && (!res.next || logKey(x) !== logKey(res.next));
-      }).concat([res.current, res.next].filter(Boolean));
-      setData(Object.assign({}, App.data, { log: log }));
-      toast("Moved to " + L.shortDate(res.next.date) + ".");
+      applyLog(res.current, key);
+      toast("It will show on " + L.shortDate(res.nextDate) + " as a follow-up.");
     }, fail);
   });
   return { node: node, toggle: function () { node.hidden = !node.hidden; if (!node.hidden) leftover.focus(); } };
@@ -171,19 +198,19 @@ function openEventEditor(ev, defaults) {
   var initial = JSON.stringify(collect());
   guardDirty(function () { return JSON.stringify(collect()) !== initial; });
 
-  var saveBtn = el("button", { type: "button", class: "btn btn-ink" }, isNew ? "Add event" : "Save");
+  var saveBtn = el("button", { type: "button", class: "btn btn-ink" }, isNew ? "Add item" : "Save");
   function save() {
     busy(saveBtn, api("saveEvent", collect())).then(function (res) {
       App.guardClose = null;
       closeLayer();
       setData(withList("events", res.event, idOf));
-      toast(isNew ? "Event added." : "Event saved.");
+      toast(isNew ? "Item added." : "Item saved.");
     }, fail);
   }
   saveBtn.addEventListener("click", save);
 
   var body = [
-    !isNew && base.repeat !== "none" ? el("div", { class: "notice notice-stripe" }, "This event repeats. Changes apply to every repeat.") : null,
+    !isNew && base.repeat !== "none" ? el("div", { class: "notice notice-stripe" }, "This item repeats. Changes apply to every repeat.") : null,
     field("What", title),
     field("Date", date, base.on && base.on !== base.date ? "· first date of the series" : ""),
     el("label", { class: "check", style: "margin-bottom:12px" }, [allDay, "All day"]),
@@ -199,17 +226,17 @@ function openEventEditor(ev, defaults) {
     el("button", { type: "button", class: "btn", onclick: function () { closeLayer(); } }, "Cancel"),
     el("span", { class: "spacer" }),
     isNew ? null : el("button", { type: "button", class: "btn btn-danger", onclick: function (e) {
-      var question = base.repeat !== "none" ? "Delete this event and all its repeats?" : "Delete this event?";
+      var question = base.repeat !== "none" ? "Delete this item and all its repeats?" : "Delete this item?";
       if (!window.confirm(question)) return;
       busy(e.currentTarget, api("deleteEvent", base.id)).then(function () {
         App.guardClose = null;
         closeLayer();
         setData(withList("events", base, idOf, true));
-        toast("Event deleted.");
+        toast("Item deleted.");
       }, fail);
     } }, "Delete")
   ];
-  var drawer = openDrawer(isNew ? "New event" : "Edit event", isNew ? "Duty, detention, rehearsals, meetings…" : null, body, footer);
+  var drawer = openDrawer(isNew ? "New item" : "Edit item", isNew ? "Meetings, duties, detention, reminders… anything besides lessons" : null, body, footer);
   saveShortcut(drawer, save);
 }
 
@@ -242,7 +269,8 @@ function periodPicks(start, end) {
 // ---------- to-do ----------
 function openTodoEditor(todo, defaults) {
   var isNew = !todo || !todo.id;
-  var base = isNew ? Object.assign({ title: "", due: "", time: "", classId: "", notes: "", done: false }, defaults || {}) : todo;
+  var base = isNew ? Object.assign({ title: "", due: "", time: "", classId: "", notes: "", done: false, category: "" }, defaults || {}) : todo;
+  var category = categorySelect(base.category);
   var title = textInput(base.title, { maxlength: "200", placeholder: "e.g. Mark 3D essays", "data-autofocus": "" });
   var due = el("input", { class: "input", type: "date", value: base.due || "", style: "max-width:200px" });
   var time = el("input", { class: "input", type: "time", value: base.time || "", style: "max-width:140px", "aria-label": "Time (optional)" });
@@ -254,7 +282,8 @@ function openTodoEditor(todo, defaults) {
   var done = el("input", { type: "checkbox", checked: !!base.done });
 
   function collect() {
-    return { id: isNew ? "" : base.id, title: title.value, due: due.value, time: due.value ? time.value : "", classId: cls.value, notes: notes.value, done: done.checked, doneAt: base.doneAt || "" };
+    return { id: isNew ? "" : base.id, title: title.value, due: due.value, time: due.value ? time.value : "", classId: cls.value, notes: notes.value,
+      done: done.checked, doneAt: base.doneAt || "", category: category.value };
   }
   var initial = JSON.stringify(collect());
   guardDirty(function () { return JSON.stringify(collect()) !== initial; });
@@ -276,7 +305,8 @@ function openTodoEditor(todo, defaults) {
 
   var body = [
     field("To-do", title),
-    el("div", { class: "field" }, [el("span", { class: "label" }, "Due"), el("div", { class: "row" }, [due, time]), quick]),
+    field("Category", category, "· optional"),
+    el("div", { class: "field" }, [el("span", { class: "label" }, "Due · optional"), el("div", { class: "row" }, [due, time]), quick]),
     field("Class", cls, "· optional"),
     field("Notes", notes),
     isNew ? null : el("label", { class: "check" }, [done, "Done"])

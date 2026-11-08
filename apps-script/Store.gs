@@ -9,21 +9,33 @@ var TABS = {
   Settings: { headers: ["Key", "Value"], fields: ["key", "value"] },
   Classes: { headers: ["Id", "Name", "Colour"], fields: ["id", "name", "colour"] },
   Timetable: { headers: ["Day", "Period", "Class Id"], fields: ["day", "period", "classId"] },
+  // New columns go on the end, so Sheets made by older versions keep working (see syncHeaders_).
   Log: {
-    headers: ["Date", "Class Id", "Plan / covered", "Remind students", "Homework", "Homework due", "Notes", "Done", "Updated"],
-    fields: ["date", "classId", "plan", "remind", "homework", "homeworkDue", "notes", "done", "updated"]
+    headers: ["Date", "Class Id", "Plan", "Remind students", "Homework", "Homework due", "Notes", "Done", "Updated",
+      "Covered", "Follow up next lesson", "Follow-up done"],
+    fields: ["date", "classId", "plan", "remind", "homework", "homeworkDue", "notes", "done", "updated",
+      "covered", "followUp", "followUpDone"]
   },
   Events: {
     headers: ["Id", "Title", "Date", "Start", "End", "Repeat", "Repeat on", "Until", "Replaces lessons", "Notes"],
     fields: ["id", "title", "date", "start", "end", "repeat", "repeatOn", "until", "replaces", "notes"]
   },
   Todos: {
-    headers: ["Id", "Title", "Due", "Time", "Class Id", "Notes", "Done", "Done on"],
-    fields: ["id", "title", "due", "time", "classId", "notes", "done", "doneAt"]
-  }
+    headers: ["Id", "Title", "Due", "Time", "Class Id", "Notes", "Done", "Done on", "Category"],
+    fields: ["id", "title", "due", "time", "classId", "notes", "done", "doneAt", "category"]
+  },
+  Marks: {
+    headers: ["Id", "What", "Class Id", "Collected", "Return by", "Scripts", "Marked", "Notes", "Done", "Done on",
+      "From homework", "Students (app use)", "Scoresheet column"],
+    fields: ["id", "title", "classId", "collected", "due", "scripts", "marked", "notes", "done", "doneAt",
+      "homework", "students", "sheetCol"]
+  },
+  Students: { headers: ["Class Id", "No.", "Name"], fields: ["classId", "no", "name"] }
 };
-var NUMBER_FIELDS = { day: true, repeatOn: true };
-var BOOLEAN_FIELDS = { done: true, replaces: true };
+var NUMBER_FIELDS = { day: true, repeatOn: true, scripts: true, marked: true, no: true };
+var BOOLEAN_FIELDS = { done: true, replaces: true, followUpDone: true };
+// Kept in one cell as JSON: {classNo: {s: "S"|"L"|"A"|"M"|"", m: true|false}}.
+var JSON_FIELDS = { students: true };
 
 // The owner's Sheet keeps the original property name, so existing data is found unchanged.
 function sheetIdKeyFor_(notebook) {
@@ -91,18 +103,39 @@ function addHeaders_(sheet, name) {
   sheet.getRange(1, 1, 1, TABS[name].headers.length).setFontWeight("bold");
 }
 
+var syncedTabs_ = {};
+
 function tab_(name) {
   var book = book_();
   var sheet = book.getSheetByName(name);
   if (!sheet) {
     sheet = book.insertSheet(name);
     addHeaders_(sheet, name);
+  } else {
+    syncHeaders_(book, sheet, name);
   }
   return sheet;
 }
 
+// A Sheet made before a column was added gets the new header names, once per run.
+function syncHeaders_(book, sheet, name) {
+  var key = book.getId() + "|" + name;
+  if (syncedTabs_[key]) return;
+  syncedTabs_[key] = true;
+  var headers = TABS[name].headers;
+  var current = sheet.getRange(1, 1, 1, headers.length).getValues()[0];
+  if (current.some(function (v, i) { return v !== headers[i]; })) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold");
+  }
+}
+
 function fromCell_(field, value) {
   if (BOOLEAN_FIELDS[field]) return value === true || value === "yes" || value === "TRUE";
+  if (JSON_FIELDS[field]) {
+    if (!value) return {};
+    try { var parsed = JSON.parse(String(value)); return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}; }
+    catch (e) { return {}; }
+  }
   if (value instanceof Date) {
     var format = field === "start" || field === "end" || field === "time" ? "HH:mm" : "yyyy-MM-dd";
     return Utilities.formatDate(value, Session.getScriptTimeZone(), format);
@@ -114,6 +147,7 @@ function fromCell_(field, value) {
 // A leading apostrophe keeps Sheets from turning "2026-11-05" into a date or "=..." into a formula.
 function toCell_(field, value) {
   if (BOOLEAN_FIELDS[field]) return value ? "yes" : "";
+  if (JSON_FIELDS[field]) return value && Object.keys(value).length ? "'" + JSON.stringify(value) : "";
   if (value === "" || value === null || value === undefined) return "";
   return "'" + String(value);
 }

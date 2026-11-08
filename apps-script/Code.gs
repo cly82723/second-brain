@@ -29,7 +29,10 @@ function actionFor_(name) {
     getAll: getAll, getDataSheetUrl: getDataSheetUrl, saveSetup: saveSetup, saveLog: saveLog,
     carryForward: carryForward, saveEvent: saveEvent, deleteEvent: deleteEvent, saveTodo: saveTodo,
     deleteTodo: deleteTodo, clearDoneTodos: clearDoneTodos, importData: importData,
-    saveEmail: saveEmail, sendTestEmail: sendTestEmail
+    saveEmail: saveEmail, sendTestEmail: sendTestEmail, saveCategories: saveCategories,
+    saveMark: saveMark, deleteMark: deleteMark, saveRoster: saveRoster,
+    linkScoresheet: linkScoresheet, unlinkScoresheet: unlinkScoresheet,
+    previewScoresheet: previewScoresheet, writeScoresheet: writeScoresheet
   };
   return Object.prototype.hasOwnProperty.call(actions, name) ? actions[name] : null;
 }
@@ -204,6 +207,8 @@ function allData_() {
   return {
     email: recipient_(),
     owner: currentNotebook_.owner,
+    // The account the web app runs as: a scoresheet must be shared with it to be linked.
+    ownerEmail: Session.getEffectiveUser().getEmail(),
     today: today_(),
     schools: listSchools_(),
     colours: CLASS_COLOURS,
@@ -216,12 +221,33 @@ function allData_() {
     },
     school: buildSchool_(schoolId),
     periods: settings.periods || spec.periods,
+    categories: settings.categories || DEFAULT_CATEGORIES,
     classes: readTab_("Classes"),
     timetable: readTab_("Timetable"),
     log: readTab_("Log"),
     events: readTab_("Events"),
-    todos: readTab_("Todos")
+    todos: readTab_("Todos"),
+    marks: readTab_("Marks"),
+    rosters: rostersByClass_(),
+    // Which classes have a scoresheet linked (the file id stays on the server).
+    scoresheets: Object.keys(settings.scoresheets || {}).reduce(function (o, k) { o[k] = true; return o; }, {})
   };
+}
+
+function categoryIdSet_() {
+  var ids = Object.create(null);
+  (readSettings_().categories || DEFAULT_CATEGORIES).forEach(function (c) { ids[c.id] = true; });
+  return ids;
+}
+
+function saveCategories(list) {
+  return respond_(function () {
+    return withLock_(function () {
+      var clean = cleanCategories_(list);
+      writeSetting_("categories", clean);
+      return { categories: clean };
+    });
+  });
 }
 
 function context_() {
@@ -306,7 +332,8 @@ function writeLog_(clean) {
   return upsert_("Log", logKey_, Object.assign({}, clean, { updated: today_() }));
 }
 
-// "Didn't finish": ticks this lesson and adds what's left to the top of the class's next lesson.
+// "Didn't finish": ticks this lesson and adds what's left to its follow-up, which then shows at the
+// top of the class's next lesson until it's ticked off there.
 function carryForward(request) {
   return respond_(function () {
     return withLock_(function () {
@@ -316,15 +343,10 @@ function carryForward(request) {
       var leftover = requiredText_(request && request.leftover, LIMITS.text, "What's left");
       var next = L.nextLesson(ctx, current.classId, current.date);
       if (!next) throw new UserError_("There's no later lesson with this class in the calendar to move it to.");
-      var existing = next.entry || { date: next.date, classId: current.classId };
-      var line = "From " + L.shortDate(current.date) + ": " + leftover;
-      var nextEntry = cleanLogEntry_(Object.assign({}, existing, {
-        plan: existing.plan ? line + "\n" + existing.plan : line
+      var followUp = cleanLogEntry_(Object.assign({}, current, {
+        followUp: current.followUp ? current.followUp + "\n" + leftover : leftover, followUpDone: false, done: true
       }), classIdSet_());
-      return {
-        current: writeLog_(Object.assign({}, current, { done: true })),
-        next: writeLog_(Object.assign({}, nextEntry, { done: !!existing.done }))
-      };
+      return { current: writeLog_(followUp), nextDate: next.date };
     });
   });
 }
@@ -350,7 +372,7 @@ function deleteEvent(id) {
 function saveTodo(todo) {
   return respond_(function () {
     return withLock_(function () {
-      var clean = cleanTodo_(todo, classIdSet_(), today_());
+      var clean = cleanTodo_(todo, classIdSet_(), today_(), categoryIdSet_());
       var isNew = !findRow_("Todos", idKey_, clean.id);
       if (isNew && readTab_("Todos").length >= LIMITS.todos) throw new UserError_("You've reached the limit of " + LIMITS.todos + " to-dos. Delete some finished ones first.");
       return { todo: upsert_("Todos", idKey_, clean) };

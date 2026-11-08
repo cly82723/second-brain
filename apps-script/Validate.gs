@@ -2,8 +2,17 @@
    with a message a teacher can act on. */
 
 var LIMITS = {
-  text: 4000, title: 200, className: 40, classes: 40, periods: 20, events: 2000, todos: 3000, importRows: 5000
+  text: 4000, title: 200, className: 40, classes: 40, periods: 20, events: 2000, todos: 3000, importRows: 5000,
+  categories: 20, categoryName: 30, marks: 2000, students: 60, studentName: 60, scripts: 500
 };
+var HAND_IN = ["S", "L", "A", "M", ""]; // Submitted, Late, Absent/excused, Missing, not yet recorded
+var DEFAULT_CATEGORIES = [
+  { id: "admin", name: "Admin", colour: "sky" },
+  { id: "prep", name: "Lesson prep", colour: "sage" },
+  { id: "meetings", name: "Meetings", colour: "lilac" },
+  { id: "duties", name: "Duties", colour: "apricot" },
+  { id: "personal", name: "Personal", colour: "rose" }
+];
 var CLASS_COLOURS = ["sage", "sky", "apricot", "lilac", "rose", "butter", "teal", "clay"];
 var ID_PATTERN = /^[A-Za-z0-9_-]{2,48}$/;
 var PERIOD_ID_PATTERN = /^[A-Za-z0-9]{1,8}$/;
@@ -109,15 +118,94 @@ function cleanLogEntry_(e, classIds) {
   if (!e || typeof e !== "object") throw new UserError_("That entry didn't arrive. Please try again.");
   var date = requiredDate_(e.date, "The lesson date");
   if (!classIds[e.classId]) throw new UserError_("That class isn't in your timetable any more. Please reload the page.");
+  var followUp = text_(e.followUp, LIMITS.text, "Follow up");
   return {
     date: date,
     classId: e.classId,
     plan: text_(e.plan, LIMITS.text, "Plan"),
+    covered: text_(e.covered, LIMITS.text, "Covered"),
+    followUp: followUp,
+    followUpDone: !!followUp && !!e.followUpDone,
     remind: text_(e.remind, LIMITS.text, "Remind students"),
     homework: text_(e.homework, LIMITS.text, "Homework"),
     homeworkDue: optionalDate_(e.homeworkDue, "Homework due date"),
     notes: text_(e.notes, LIMITS.text, "Notes"),
     done: !!e.done
+  };
+}
+
+function cleanCategories_(list) {
+  if (!Array.isArray(list)) throw new UserError_("The category list didn't arrive. Please try again.");
+  if (list.length > LIMITS.categories) throw new UserError_("That's more categories than the app allows (" + LIMITS.categories + ").");
+  var ids = Object.create(null);
+  var names = Object.create(null);
+  return list.map(function (c) {
+    var id = cleanId_(c && c.id);
+    if (!id || ids[id]) throw new UserError_("A category is missing its id. Please reload the page and try again.");
+    ids[id] = true;
+    var name = requiredText_(c.name, LIMITS.categoryName, "Category name");
+    if (names[name.toLowerCase()]) throw new UserError_("There are two categories called " + name + ".");
+    names[name.toLowerCase()] = true;
+    return { id: id, name: name, colour: CLASS_COLOURS.indexOf(c.colour) >= 0 ? c.colour : CLASS_COLOURS[0] };
+  });
+}
+
+// One class's name list: [{no, name}], class numbers unique.
+function cleanRoster_(list) {
+  if (!Array.isArray(list)) throw new UserError_("The name list didn't arrive. Please try again.");
+  if (list.length > LIMITS.students) throw new UserError_("A class can have at most " + LIMITS.students + " students here.");
+  var seen = Object.create(null);
+  return list.map(function (s) {
+    var no = Number(s && s.no);
+    if (!(no >= 1 && no <= 99 && Math.floor(no) === no)) throw new UserError_("Each student needs a class number from 1 to 99.");
+    if (seen[no]) throw new UserError_("Class number " + no + " appears twice in the list.");
+    seen[no] = true;
+    return { no: no, name: requiredText_(s.name, LIMITS.studentName, "Student " + no + "'s name") };
+  }).sort(function (a, b) { return a.no - b.no; });
+}
+
+function cleanHandIns_(students) {
+  if (students === undefined || students === null || students === "") return {};
+  if (typeof students !== "object" || Array.isArray(students)) throw new UserError_("The hand-in list didn't arrive properly. Please try again.");
+  var keys = Object.keys(students);
+  if (keys.length > LIMITS.students) throw new UserError_("That's more students than the app allows (" + LIMITS.students + ").");
+  var clean = {};
+  keys.forEach(function (k) {
+    if (!/^\d{1,2}$/.test(k)) throw new UserError_("The hand-in list has a bad class number.");
+    var v = students[k] || {};
+    clean[k] = { s: HAND_IN.indexOf(v.s) >= 0 ? v.s : "", m: !!v.m };
+  });
+  return clean;
+}
+
+function cleanCount_(value, what) {
+  if (value === undefined || value === null || value === "") return "";
+  var n = Number(value);
+  if (!(n >= 0 && n <= LIMITS.scripts && Math.floor(n) === n)) throw new UserError_(what + " must be a whole number from 0 to " + LIMITS.scripts + ".");
+  return n;
+}
+
+function cleanMark_(m, classIds, today) {
+  if (!m || typeof m !== "object") throw new UserError_("That marking item didn't arrive. Please try again.");
+  var classId = m.classId && classIds[m.classId] ? m.classId : "";
+  var done = !!m.done;
+  var scripts = cleanCount_(m.scripts, "Number of scripts");
+  var marked = cleanCount_(m.marked, "Number marked");
+  if (scripts !== "" && marked !== "" && marked > scripts) throw new UserError_("You can't have marked more scripts than there are.");
+  var homework = typeof m.homework === "string" && /^\d{4}-\d{2}-\d{2}\|[A-Za-z0-9_-]{2,48}$/.test(m.homework) ? m.homework : "";
+  return {
+    id: cleanId_(m.id) || newId_(),
+    title: requiredText_(m.title, LIMITS.title, "What to mark"),
+    classId: classId,
+    collected: optionalDate_(m.collected, "The date collected"),
+    due: optionalDate_(m.due, "The return-by date"),
+    scripts: scripts, marked: marked,
+    notes: text_(m.notes, LIMITS.text, "Notes"),
+    done: done,
+    doneAt: done ? (optionalDate_(m.doneAt, "Done date") || today) : "",
+    homework: homework,
+    students: classId ? cleanHandIns_(m.students) : {},
+    sheetCol: "" // only ever set by the web app itself, after writing to a scoresheet
   };
 }
 
@@ -145,10 +233,12 @@ function cleanEvent_(ev, cycleLength) {
   };
 }
 
-function cleanTodo_(t, classIds, today) {
+// categoryIds: the notebook's categories; a category that has since been deleted is dropped.
+function cleanTodo_(t, classIds, today, categoryIds) {
   if (!t || typeof t !== "object") throw new UserError_("That to-do didn't arrive. Please try again.");
   var due = optionalDate_(t.due, "The due date");
   var classId = t.classId && classIds[t.classId] ? t.classId : "";
+  var category = t.category && categoryIds && categoryIds[t.category] ? t.category : "";
   var done = !!t.done;
   return {
     id: cleanId_(t.id) || newId_(),
@@ -158,6 +248,7 @@ function cleanTodo_(t, classIds, today) {
     classId: classId,
     notes: text_(t.notes, LIMITS.text, "Notes"),
     done: done,
-    doneAt: done ? (optionalDate_(t.doneAt, "Done date") || today) : ""
+    doneAt: done ? (optionalDate_(t.doneAt, "Done date") || today) : "",
+    category: category
   };
 }

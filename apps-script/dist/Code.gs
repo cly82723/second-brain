@@ -7,7 +7,8 @@
      - apps-script/Store.gs
      - apps-script/Code.gs
      - apps-script/Import.gs
-     - apps-script/Email.gs */
+     - apps-script/Email.gs
+     - apps-script/Marking.gs */
 
 // ===== core/logic.js =====
 /* The rules of the calendar and logbook, in one place: pure functions with no outside access.
@@ -71,15 +72,79 @@ function logic_() {
       (timetableByDay[t.day] = timetableByDay[t.day] || []).push(t);
     });
     var logByKey = Object.create(null);
-    (data.log || []).forEach(function (e) { logByKey[e.date + "|" + e.classId] = e; });
+    // Follow-ups still open, per class, oldest first; homework by the day it's handed in.
+    var followUpsByClass = Object.create(null);
+    var collectByKey = Object.create(null);
+    (data.log || []).forEach(function (e) {
+      logByKey[e.date + "|" + e.classId] = e;
+      if (e.followUp && !e.followUpDone && classById[e.classId]) (followUpsByClass[e.classId] = followUpsByClass[e.classId] || []).push(e);
+      if (e.homework && e.homeworkDue && classById[e.classId]) (collectByKey[e.homeworkDue + "|" + e.classId] = collectByKey[e.homeworkDue + "|" + e.classId] || []).push(e);
+    });
+    Object.keys(followUpsByClass).forEach(function (k) { followUpsByClass[k].sort(function (a, b) { return a.date < b.date ? -1 : 1; }); });
+    var categories = data.categories || [];
+    var categoryById = Object.create(null);
+    categories.forEach(function (c) { categoryById[c.id] = c; });
     return {
       school: data.school, periods: periods, periodIndex: periodIndex, classes: data.classes || [],
       classById: classById, timetableByDay: timetableByDay, logByKey: logByKey,
-      log: data.log || [], events: data.events || [], todos: data.todos || []
+      followUpsByClass: followUpsByClass, collectByKey: collectByKey, followUpTargets: Object.create(null),
+      today: data.today || "",
+      categories: categories, categoryById: categoryById, rosters: data.rosters || {},
+      log: data.log || [], events: data.events || [], todos: data.todos || [], marks: data.marks || []
     };
   }
 
+  // Students still missing from marking collected before that day: chase them at the class's lesson.
+  function chaseFor(ctx, classId, date) {
+    var roster = ctx.rosters[classId] || [];
+    var nameOf = Object.create(null);
+    roster.forEach(function (s) { nameOf[s.no] = s.name; });
+    return ctx.marks.filter(function (m) { return !m.done && m.classId === classId && m.collected && m.collected < date; })
+      .map(function (m) {
+        var missing = markProgress(m).missing;
+        return { mark: m, names: missing.map(function (no) { return nameOf[no] || "No. " + no; }) };
+      })
+      .filter(function (c) { return c.names.length; });
+  }
+
   function entryFor(ctx, date, classId) { return ctx.logByKey[date + "|" + classId] || null; }
+
+  // Whether the class is really taught that day: on the timetable, and not replaced by an event.
+  function classOn(ctx, classId, date) {
+    var cycleDay = dayInfo(ctx.school, date).cycleDay;
+    if (!cycleDay) return false;
+    var periods = (ctx.timetableByDay[cycleDay] || []).filter(function (t) { return t.classId === classId; })
+      .map(function (t) { return ctx.periods[ctx.periodIndex[t.period]]; });
+    if (!periods.length) return false;
+    return !eventsOn(ctx, date).some(function (ev) {
+      return ev.replaces && periods.some(function (p) { return overlaps(ev, p.start, p.end); });
+    });
+  }
+
+  // The lesson a follow-up belongs to: the class's next lesson after it was written, or, once that
+  // has passed without a tick, the next one from today. So it sits on one lesson at a time.
+  function followUpTarget(ctx, e) {
+    var from = addDays(e.date, 1);
+    if (ctx.today && ctx.today > from) from = ctx.today;
+    for (var i = 0; i <= LOOKAHEAD_DAYS; i++) {
+      var d = addDays(from, i);
+      if (classOn(ctx, e.classId, d)) return d;
+    }
+    return null;
+  }
+
+  // What a lesson should pick up from earlier ones: follow-ups not yet ticked.
+  function followUpsFor(ctx, classId, date) {
+    return (ctx.followUpsByClass[classId] || []).filter(function (e) {
+      if (!(e.date < date)) return false;
+      var key = e.date + "|" + e.classId;
+      if (!(key in ctx.followUpTargets)) ctx.followUpTargets[key] = followUpTarget(ctx, e);
+      return ctx.followUpTargets[key] === date;
+    });
+  }
+
+  // Homework that this class hands in on that day.
+  function collectFor(ctx, date, classId) { return ctx.collectByKey[date + "|" + classId] || []; }
 
   // ---- events ----
   function occursOn(ctx, ev, date) {
@@ -129,7 +194,9 @@ function logic_() {
         date: date, cycleDay: info.cycleDay, classId: classId, cls: ctx.classById[classId],
         periods: periods, periodText: periodText(periods), lengthText: lengthWord(periods.length),
         start: periods[0].start, end: periods[periods.length - 1].end,
-        entry: entryFor(ctx, date, classId), replacedBy: replacedBy
+        entry: entryFor(ctx, date, classId), replacedBy: replacedBy,
+        followUps: followUpsFor(ctx, classId, date), collect: collectFor(ctx, date, classId),
+        chase: chaseFor(ctx, classId, date)
       };
     });
   }
@@ -148,7 +215,7 @@ function logic_() {
   }
 
   function hasWriting(entry) {
-    return !!(entry.plan || entry.remind || entry.homework || entry.notes);
+    return !!(entry.plan || entry.covered || entry.followUp || entry.remind || entry.homework || entry.notes);
   }
 
   function teachesOn(ctx, date, classId) {
@@ -192,6 +259,44 @@ function logic_() {
 
   function openTodos(ctx) { return ctx.todos.filter(function (t) { return !t.done; }); }
 
+  function openMarks(ctx) { return ctx.marks.filter(function (m) { return !m.done; }); }
+
+  // Things with no date that probably need one: open to-dos, homework, and marking.
+  function undated(ctx) {
+    return {
+      todos: openTodos(ctx).filter(function (t) { return !t.due; }),
+      homework: ctx.log.filter(function (e) { return e.homework && !e.homeworkDue && ctx.classById[e.classId]; })
+        .sort(function (a, b) { return a.date < b.date ? 1 : -1; }),
+      marks: openMarks(ctx).filter(function (m) { return !m.due; })
+    };
+  }
+
+  function undatedCount(u) { return u.todos.length + u.homework.length + u.marks.length; }
+
+  // Marking still to do, soonest return date first (undated last).
+  function marksByDue(ctx) {
+    return openMarks(ctx).slice().sort(function (a, b) {
+      if (!a.due !== !b.due) return a.due ? -1 : 1;
+      return a.due < b.due ? -1 : a.due > b.due ? 1 : 0;
+    });
+  }
+
+  function marksDueOn(ctx, date) { return openMarks(ctx).filter(function (m) { return m.due === date; }); }
+
+  // How far through a marking pile: from the name list when there is one, otherwise the counts typed.
+  function markProgress(mark) {
+    var students = mark.students || {};
+    var ids = Object.keys(students);
+    if (ids.length) {
+      var handedIn = ids.filter(function (k) { return students[k].s === "S" || students[k].s === "L"; });
+      var marked = handedIn.filter(function (k) { return students[k].m; }).length;
+      var missing = ids.filter(function (k) { return students[k].s === "M"; });
+      return { total: handedIn.length, marked: marked, missing: missing, fromList: true };
+    }
+    var total = Number(mark.scripts) || 0;
+    return { total: total, marked: Math.min(Number(mark.marked) || 0, total || Infinity), missing: [], fromList: false };
+  }
+
   // To-dos sorted into the groups the To-dos page shows.
   function groupTodos(ctx, today) {
     var weekEnd = addDays(today, 7);
@@ -228,6 +333,44 @@ function logic_() {
     return openTodos(ctx).filter(function (t) { return t.due === date; });
   }
 
+  // ---- day strip ----
+  // The rows of a day from 7:40 to 18:00: one row before school, the school's own periods (lessons,
+  // recess, lunch at their real times), then 40-minute rows after school.
+  var STRIP_START = "07:40", STRIP_END = "18:00", AFTER_SCHOOL_MINUTES = 40;
+  function clock(mins) { var h = Math.floor(mins / 60), m = mins % 60; return (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m; }
+
+  function stripRows(periods) {
+    var sorted = (periods || []).slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+    var rows = [];
+    var t = STRIP_START;
+    sorted.forEach(function (p) {
+      if (p.end <= STRIP_START || p.start >= STRIP_END) return;
+      if (p.start > t) rows.push({ start: t, end: p.start, label: rows.length ? "" : "Before school", kind: "open" });
+      rows.push({ start: p.start, end: p.end, label: p.label, kind: p.teaching ? "period" : "break", period: p.id });
+      if (p.end > t) t = p.end;
+    });
+    for (var m = minutes(t); m < minutes(STRIP_END); m += AFTER_SCHOOL_MINUTES) {
+      var end = Math.min(m + AFTER_SCHOOL_MINUTES, minutes(STRIP_END));
+      rows.push({ start: clock(m), end: clock(end), label: sorted.length ? "After school" : "", kind: "open" });
+    }
+    return rows.filter(function (r) { return r.start < r.end; });
+  }
+
+  // A day with lessons (a cycle day, or a weekday at a Mon–Fri school).
+  function nextSchoolDay(ctx, date) {
+    for (var i = 1; i <= 60; i++) {
+      var d = addDays(date, i);
+      if (dayInfo(ctx.school, d).cycleDay) return d;
+    }
+    return null;
+  }
+
+  function schoolDaysAfter(ctx, date, count) {
+    var found = [];
+    for (var d = nextSchoolDay(ctx, date); d && found.length < count; d = nextSchoolDay(ctx, d)) found.push(d);
+    return found;
+  }
+
   function findCycleDay(ctx, cycleDay, fromDate) {
     for (var i = 0; i <= 400; i++) {
       var date = addDays(fromDate, i);
@@ -245,10 +388,12 @@ function logic_() {
     var events = eventsOn(ctx, tomorrow);
     var due = todosDueOn(ctx, tomorrow);
     var homework = homeworkDueOn(ctx, tomorrow);
-    if (!lessons.length && !events.length && !due.length && !homework.length) return null;
+    var marks = marksDueOn(ctx, tomorrow);
+    if (!lessons.length && !events.length && !due.length && !homework.length && !marks.length) return null;
     var leftToday = notUpdated(ctx, since, today, 24 * 60).filter(function (l) { return l.date === today; });
     return {
       date: tomorrow, info: info, lessons: lessons, events: events, todosDue: due, homeworkDue: homework,
+      marksDue: marks, overdueMarks: openMarks(ctx).filter(function (m) { return m.due && m.due <= today; }),
       overdue: openTodos(ctx).filter(function (t) { return t.due && t.due <= today; }),
       leftToday: leftToday
     };
@@ -261,7 +406,10 @@ function logic_() {
     entryFor: entryFor, eventsOn: eventsOn, occursOn: occursOn, lessonsOn: lessonsOn, lessonStatus: lessonStatus,
     hasWriting: hasWriting, nextLesson: nextLesson, previousLesson: previousLesson, notUpdated: notUpdated,
     homeworkDueOn: homeworkDueOn, groupTodos: groupTodos, todosDueOn: todosDueOn, weekDays: weekDays,
-    findCycleDay: findCycleDay, digest: digest
+    findCycleDay: findCycleDay, digest: digest, followUpsFor: followUpsFor, collectFor: collectFor,
+    undated: undated, undatedCount: undatedCount, openMarks: openMarks, marksByDue: marksByDue,
+    marksDueOn: marksDueOn, markProgress: markProgress, chaseFor: chaseFor, stripRows: stripRows,
+    nextSchoolDay: nextSchoolDay, schoolDaysAfter: schoolDaysAfter
   };
 }
 
@@ -572,8 +720,17 @@ function expandLabels_(ranges) {
    with a message a teacher can act on. */
 
 var LIMITS = {
-  text: 4000, title: 200, className: 40, classes: 40, periods: 20, events: 2000, todos: 3000, importRows: 5000
+  text: 4000, title: 200, className: 40, classes: 40, periods: 20, events: 2000, todos: 3000, importRows: 5000,
+  categories: 20, categoryName: 30, marks: 2000, students: 60, studentName: 60, scripts: 500
 };
+var HAND_IN = ["S", "L", "A", "M", ""]; // Submitted, Late, Absent/excused, Missing, not yet recorded
+var DEFAULT_CATEGORIES = [
+  { id: "admin", name: "Admin", colour: "sky" },
+  { id: "prep", name: "Lesson prep", colour: "sage" },
+  { id: "meetings", name: "Meetings", colour: "lilac" },
+  { id: "duties", name: "Duties", colour: "apricot" },
+  { id: "personal", name: "Personal", colour: "rose" }
+];
 var CLASS_COLOURS = ["sage", "sky", "apricot", "lilac", "rose", "butter", "teal", "clay"];
 var ID_PATTERN = /^[A-Za-z0-9_-]{2,48}$/;
 var PERIOD_ID_PATTERN = /^[A-Za-z0-9]{1,8}$/;
@@ -679,15 +836,94 @@ function cleanLogEntry_(e, classIds) {
   if (!e || typeof e !== "object") throw new UserError_("That entry didn't arrive. Please try again.");
   var date = requiredDate_(e.date, "The lesson date");
   if (!classIds[e.classId]) throw new UserError_("That class isn't in your timetable any more. Please reload the page.");
+  var followUp = text_(e.followUp, LIMITS.text, "Follow up");
   return {
     date: date,
     classId: e.classId,
     plan: text_(e.plan, LIMITS.text, "Plan"),
+    covered: text_(e.covered, LIMITS.text, "Covered"),
+    followUp: followUp,
+    followUpDone: !!followUp && !!e.followUpDone,
     remind: text_(e.remind, LIMITS.text, "Remind students"),
     homework: text_(e.homework, LIMITS.text, "Homework"),
     homeworkDue: optionalDate_(e.homeworkDue, "Homework due date"),
     notes: text_(e.notes, LIMITS.text, "Notes"),
     done: !!e.done
+  };
+}
+
+function cleanCategories_(list) {
+  if (!Array.isArray(list)) throw new UserError_("The category list didn't arrive. Please try again.");
+  if (list.length > LIMITS.categories) throw new UserError_("That's more categories than the app allows (" + LIMITS.categories + ").");
+  var ids = Object.create(null);
+  var names = Object.create(null);
+  return list.map(function (c) {
+    var id = cleanId_(c && c.id);
+    if (!id || ids[id]) throw new UserError_("A category is missing its id. Please reload the page and try again.");
+    ids[id] = true;
+    var name = requiredText_(c.name, LIMITS.categoryName, "Category name");
+    if (names[name.toLowerCase()]) throw new UserError_("There are two categories called " + name + ".");
+    names[name.toLowerCase()] = true;
+    return { id: id, name: name, colour: CLASS_COLOURS.indexOf(c.colour) >= 0 ? c.colour : CLASS_COLOURS[0] };
+  });
+}
+
+// One class's name list: [{no, name}], class numbers unique.
+function cleanRoster_(list) {
+  if (!Array.isArray(list)) throw new UserError_("The name list didn't arrive. Please try again.");
+  if (list.length > LIMITS.students) throw new UserError_("A class can have at most " + LIMITS.students + " students here.");
+  var seen = Object.create(null);
+  return list.map(function (s) {
+    var no = Number(s && s.no);
+    if (!(no >= 1 && no <= 99 && Math.floor(no) === no)) throw new UserError_("Each student needs a class number from 1 to 99.");
+    if (seen[no]) throw new UserError_("Class number " + no + " appears twice in the list.");
+    seen[no] = true;
+    return { no: no, name: requiredText_(s.name, LIMITS.studentName, "Student " + no + "'s name") };
+  }).sort(function (a, b) { return a.no - b.no; });
+}
+
+function cleanHandIns_(students) {
+  if (students === undefined || students === null || students === "") return {};
+  if (typeof students !== "object" || Array.isArray(students)) throw new UserError_("The hand-in list didn't arrive properly. Please try again.");
+  var keys = Object.keys(students);
+  if (keys.length > LIMITS.students) throw new UserError_("That's more students than the app allows (" + LIMITS.students + ").");
+  var clean = {};
+  keys.forEach(function (k) {
+    if (!/^\d{1,2}$/.test(k)) throw new UserError_("The hand-in list has a bad class number.");
+    var v = students[k] || {};
+    clean[k] = { s: HAND_IN.indexOf(v.s) >= 0 ? v.s : "", m: !!v.m };
+  });
+  return clean;
+}
+
+function cleanCount_(value, what) {
+  if (value === undefined || value === null || value === "") return "";
+  var n = Number(value);
+  if (!(n >= 0 && n <= LIMITS.scripts && Math.floor(n) === n)) throw new UserError_(what + " must be a whole number from 0 to " + LIMITS.scripts + ".");
+  return n;
+}
+
+function cleanMark_(m, classIds, today) {
+  if (!m || typeof m !== "object") throw new UserError_("That marking item didn't arrive. Please try again.");
+  var classId = m.classId && classIds[m.classId] ? m.classId : "";
+  var done = !!m.done;
+  var scripts = cleanCount_(m.scripts, "Number of scripts");
+  var marked = cleanCount_(m.marked, "Number marked");
+  if (scripts !== "" && marked !== "" && marked > scripts) throw new UserError_("You can't have marked more scripts than there are.");
+  var homework = typeof m.homework === "string" && /^\d{4}-\d{2}-\d{2}\|[A-Za-z0-9_-]{2,48}$/.test(m.homework) ? m.homework : "";
+  return {
+    id: cleanId_(m.id) || newId_(),
+    title: requiredText_(m.title, LIMITS.title, "What to mark"),
+    classId: classId,
+    collected: optionalDate_(m.collected, "The date collected"),
+    due: optionalDate_(m.due, "The return-by date"),
+    scripts: scripts, marked: marked,
+    notes: text_(m.notes, LIMITS.text, "Notes"),
+    done: done,
+    doneAt: done ? (optionalDate_(m.doneAt, "Done date") || today) : "",
+    homework: homework,
+    students: classId ? cleanHandIns_(m.students) : {},
+    sheetCol: "" // only ever set by the web app itself, after writing to a scoresheet
   };
 }
 
@@ -715,10 +951,12 @@ function cleanEvent_(ev, cycleLength) {
   };
 }
 
-function cleanTodo_(t, classIds, today) {
+// categoryIds: the notebook's categories; a category that has since been deleted is dropped.
+function cleanTodo_(t, classIds, today, categoryIds) {
   if (!t || typeof t !== "object") throw new UserError_("That to-do didn't arrive. Please try again.");
   var due = optionalDate_(t.due, "The due date");
   var classId = t.classId && classIds[t.classId] ? t.classId : "";
+  var category = t.category && categoryIds && categoryIds[t.category] ? t.category : "";
   var done = !!t.done;
   return {
     id: cleanId_(t.id) || newId_(),
@@ -728,7 +966,8 @@ function cleanTodo_(t, classIds, today) {
     classId: classId,
     notes: text_(t.notes, LIMITS.text, "Notes"),
     done: done,
-    doneAt: done ? (optionalDate_(t.doneAt, "Done date") || today) : ""
+    doneAt: done ? (optionalDate_(t.doneAt, "Done date") || today) : "",
+    category: category
   };
 }
 
@@ -744,21 +983,33 @@ var TABS = {
   Settings: { headers: ["Key", "Value"], fields: ["key", "value"] },
   Classes: { headers: ["Id", "Name", "Colour"], fields: ["id", "name", "colour"] },
   Timetable: { headers: ["Day", "Period", "Class Id"], fields: ["day", "period", "classId"] },
+  // New columns go on the end, so Sheets made by older versions keep working (see syncHeaders_).
   Log: {
-    headers: ["Date", "Class Id", "Plan / covered", "Remind students", "Homework", "Homework due", "Notes", "Done", "Updated"],
-    fields: ["date", "classId", "plan", "remind", "homework", "homeworkDue", "notes", "done", "updated"]
+    headers: ["Date", "Class Id", "Plan", "Remind students", "Homework", "Homework due", "Notes", "Done", "Updated",
+      "Covered", "Follow up next lesson", "Follow-up done"],
+    fields: ["date", "classId", "plan", "remind", "homework", "homeworkDue", "notes", "done", "updated",
+      "covered", "followUp", "followUpDone"]
   },
   Events: {
     headers: ["Id", "Title", "Date", "Start", "End", "Repeat", "Repeat on", "Until", "Replaces lessons", "Notes"],
     fields: ["id", "title", "date", "start", "end", "repeat", "repeatOn", "until", "replaces", "notes"]
   },
   Todos: {
-    headers: ["Id", "Title", "Due", "Time", "Class Id", "Notes", "Done", "Done on"],
-    fields: ["id", "title", "due", "time", "classId", "notes", "done", "doneAt"]
-  }
+    headers: ["Id", "Title", "Due", "Time", "Class Id", "Notes", "Done", "Done on", "Category"],
+    fields: ["id", "title", "due", "time", "classId", "notes", "done", "doneAt", "category"]
+  },
+  Marks: {
+    headers: ["Id", "What", "Class Id", "Collected", "Return by", "Scripts", "Marked", "Notes", "Done", "Done on",
+      "From homework", "Students (app use)", "Scoresheet column"],
+    fields: ["id", "title", "classId", "collected", "due", "scripts", "marked", "notes", "done", "doneAt",
+      "homework", "students", "sheetCol"]
+  },
+  Students: { headers: ["Class Id", "No.", "Name"], fields: ["classId", "no", "name"] }
 };
-var NUMBER_FIELDS = { day: true, repeatOn: true };
-var BOOLEAN_FIELDS = { done: true, replaces: true };
+var NUMBER_FIELDS = { day: true, repeatOn: true, scripts: true, marked: true, no: true };
+var BOOLEAN_FIELDS = { done: true, replaces: true, followUpDone: true };
+// Kept in one cell as JSON: {classNo: {s: "S"|"L"|"A"|"M"|"", m: true|false}}.
+var JSON_FIELDS = { students: true };
 
 // The owner's Sheet keeps the original property name, so existing data is found unchanged.
 function sheetIdKeyFor_(notebook) {
@@ -826,18 +1077,39 @@ function addHeaders_(sheet, name) {
   sheet.getRange(1, 1, 1, TABS[name].headers.length).setFontWeight("bold");
 }
 
+var syncedTabs_ = {};
+
 function tab_(name) {
   var book = book_();
   var sheet = book.getSheetByName(name);
   if (!sheet) {
     sheet = book.insertSheet(name);
     addHeaders_(sheet, name);
+  } else {
+    syncHeaders_(book, sheet, name);
   }
   return sheet;
 }
 
+// A Sheet made before a column was added gets the new header names, once per run.
+function syncHeaders_(book, sheet, name) {
+  var key = book.getId() + "|" + name;
+  if (syncedTabs_[key]) return;
+  syncedTabs_[key] = true;
+  var headers = TABS[name].headers;
+  var current = sheet.getRange(1, 1, 1, headers.length).getValues()[0];
+  if (current.some(function (v, i) { return v !== headers[i]; })) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold");
+  }
+}
+
 function fromCell_(field, value) {
   if (BOOLEAN_FIELDS[field]) return value === true || value === "yes" || value === "TRUE";
+  if (JSON_FIELDS[field]) {
+    if (!value) return {};
+    try { var parsed = JSON.parse(String(value)); return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}; }
+    catch (e) { return {}; }
+  }
   if (value instanceof Date) {
     var format = field === "start" || field === "end" || field === "time" ? "HH:mm" : "yyyy-MM-dd";
     return Utilities.formatDate(value, Session.getScriptTimeZone(), format);
@@ -849,6 +1121,7 @@ function fromCell_(field, value) {
 // A leading apostrophe keeps Sheets from turning "2026-11-05" into a date or "=..." into a formula.
 function toCell_(field, value) {
   if (BOOLEAN_FIELDS[field]) return value ? "yes" : "";
+  if (JSON_FIELDS[field]) return value && Object.keys(value).length ? "'" + JSON.stringify(value) : "";
   if (value === "" || value === null || value === undefined) return "";
   return "'" + String(value);
 }
@@ -964,7 +1237,10 @@ function actionFor_(name) {
     getAll: getAll, getDataSheetUrl: getDataSheetUrl, saveSetup: saveSetup, saveLog: saveLog,
     carryForward: carryForward, saveEvent: saveEvent, deleteEvent: deleteEvent, saveTodo: saveTodo,
     deleteTodo: deleteTodo, clearDoneTodos: clearDoneTodos, importData: importData,
-    saveEmail: saveEmail, sendTestEmail: sendTestEmail
+    saveEmail: saveEmail, sendTestEmail: sendTestEmail, saveCategories: saveCategories,
+    saveMark: saveMark, deleteMark: deleteMark, saveRoster: saveRoster,
+    linkScoresheet: linkScoresheet, unlinkScoresheet: unlinkScoresheet,
+    previewScoresheet: previewScoresheet, writeScoresheet: writeScoresheet
   };
   return Object.prototype.hasOwnProperty.call(actions, name) ? actions[name] : null;
 }
@@ -1139,6 +1415,8 @@ function allData_() {
   return {
     email: recipient_(),
     owner: currentNotebook_.owner,
+    // The account the web app runs as: a scoresheet must be shared with it to be linked.
+    ownerEmail: Session.getEffectiveUser().getEmail(),
     today: today_(),
     schools: listSchools_(),
     colours: CLASS_COLOURS,
@@ -1151,12 +1429,33 @@ function allData_() {
     },
     school: buildSchool_(schoolId),
     periods: settings.periods || spec.periods,
+    categories: settings.categories || DEFAULT_CATEGORIES,
     classes: readTab_("Classes"),
     timetable: readTab_("Timetable"),
     log: readTab_("Log"),
     events: readTab_("Events"),
-    todos: readTab_("Todos")
+    todos: readTab_("Todos"),
+    marks: readTab_("Marks"),
+    rosters: rostersByClass_(),
+    // Which classes have a scoresheet linked (the file id stays on the server).
+    scoresheets: Object.keys(settings.scoresheets || {}).reduce(function (o, k) { o[k] = true; return o; }, {})
   };
+}
+
+function categoryIdSet_() {
+  var ids = Object.create(null);
+  (readSettings_().categories || DEFAULT_CATEGORIES).forEach(function (c) { ids[c.id] = true; });
+  return ids;
+}
+
+function saveCategories(list) {
+  return respond_(function () {
+    return withLock_(function () {
+      var clean = cleanCategories_(list);
+      writeSetting_("categories", clean);
+      return { categories: clean };
+    });
+  });
 }
 
 function context_() {
@@ -1241,7 +1540,8 @@ function writeLog_(clean) {
   return upsert_("Log", logKey_, Object.assign({}, clean, { updated: today_() }));
 }
 
-// "Didn't finish": ticks this lesson and adds what's left to the top of the class's next lesson.
+// "Didn't finish": ticks this lesson and adds what's left to its follow-up, which then shows at the
+// top of the class's next lesson until it's ticked off there.
 function carryForward(request) {
   return respond_(function () {
     return withLock_(function () {
@@ -1251,15 +1551,10 @@ function carryForward(request) {
       var leftover = requiredText_(request && request.leftover, LIMITS.text, "What's left");
       var next = L.nextLesson(ctx, current.classId, current.date);
       if (!next) throw new UserError_("There's no later lesson with this class in the calendar to move it to.");
-      var existing = next.entry || { date: next.date, classId: current.classId };
-      var line = "From " + L.shortDate(current.date) + ": " + leftover;
-      var nextEntry = cleanLogEntry_(Object.assign({}, existing, {
-        plan: existing.plan ? line + "\n" + existing.plan : line
+      var followUp = cleanLogEntry_(Object.assign({}, current, {
+        followUp: current.followUp ? current.followUp + "\n" + leftover : leftover, followUpDone: false, done: true
       }), classIdSet_());
-      return {
-        current: writeLog_(Object.assign({}, current, { done: true })),
-        next: writeLog_(Object.assign({}, nextEntry, { done: !!existing.done }))
-      };
+      return { current: writeLog_(followUp), nextDate: next.date };
     });
   });
 }
@@ -1285,7 +1580,7 @@ function deleteEvent(id) {
 function saveTodo(todo) {
   return respond_(function () {
     return withLock_(function () {
-      var clean = cleanTodo_(todo, classIdSet_(), today_());
+      var clean = cleanTodo_(todo, classIdSet_(), today_(), categoryIdSet_());
       var isNew = !findRow_("Todos", idKey_, clean.id);
       if (isNew && readTab_("Todos").length >= LIMITS.todos) throw new UserError_("You've reached the limit of " + LIMITS.todos + " to-dos. Delete some finished ones first.");
       return { todo: upsert_("Todos", idKey_, clean) };
@@ -1326,7 +1621,7 @@ function importData(payload) {
       var plans = {
         Log: planMerge_("Log", logKey_, payload.log, function (e) { return cleanLogEntry_(e, classIds); }, LIMITS.importRows),
         Events: planMerge_("Events", idKey_, payload.events, function (e) { return cleanEvent_(e, spec.cycleLength); }, LIMITS.events),
-        Todos: planMerge_("Todos", idKey_, payload.todos, function (t) { return cleanTodo_(t, classIds, today_()); }, LIMITS.todos)
+        Todos: planMerge_("Todos", idKey_, payload.todos, function (t) { return cleanTodo_(t, classIds, today_(), categoryIdSet_()); }, LIMITS.todos)
       };
       // Everything checked: now write.
       if (setup) writeSetup_(setup);
@@ -1504,6 +1799,12 @@ function digestEmail_(ctx, d, url) {
       var when = ev.allDay ? "All day" : ev.start + (ev.end ? "–" + ev.end : "");
       return { title: ev.title, meta: when + (ev.replaces ? " · replaces lessons" : ""), lines: ev.notes ? [["Notes", ev.notes]] : [] };
     })),
+    section_("Marking due", d.marksDue.concat(d.overdueMarks).map(function (m) {
+      var p = L.markProgress(m);
+      var cls = m.classId && ctx.classById[m.classId];
+      return { title: m.title, meta: [cls ? cls.name : "", m.due < d.date ? "overdue, was due " + L.shortDate(m.due) : "",
+        p.total ? p.marked + " of " + p.total + " marked" : ""].filter(Boolean).join(" · ") };
+    })),
     section_("To-dos due tomorrow", d.todosDue.map(function (t) { return { title: t.title, meta: t.time || "" }; })),
     section_("Overdue to-dos", d.overdue.map(function (t) { return { title: t.title, meta: "was due " + L.shortDate(t.due) }; }))
   ].filter(Boolean);
@@ -1521,6 +1822,8 @@ function lessonItem_(l) {
   var e = l.entry || {};
   var lines = [];
   if (l.replacedBy) lines.push(["Replaced by", l.replacedBy.title]);
+  (l.followUps || []).forEach(function (f) { lines.push(["Follow up (from " + logic_().shortDate(f.date) + ")", f.followUp]); });
+  (l.collect || []).forEach(function (h) { lines.push(["Collect", h.homework + " (set " + logic_().shortDate(h.date) + ")"]); });
   if (e.plan) lines.push(["Plan", e.plan]);
   if (e.remind) lines.push(["Remind students", e.remind]);
   if (e.homework) lines.push(["Homework to give", e.homework + (e.homeworkDue ? " (due " + logic_().shortDate(e.homeworkDue) + ")" : "")]);
@@ -1556,4 +1859,228 @@ function emailHtml_(heading, labels, sections, url) {
     (url ? '<p style="margin:28px 0 0"><a href="' + esc_(url) + '" style="font:600 14px Arial,sans-serif;color:#fffdf8;background:#1f2a44;padding:10px 16px;border-radius:8px;text-decoration:none">Open the app</a></p>' : "") +
     '<p style="font:400 12px Arial,sans-serif;color:#9a8f7f;margin:24px 0 0">You turned this email on in Settings. Turn it off there at any time.</p>' +
     "</div></div>";
+}
+
+// ===== apps-script/Marking.gs =====
+/* Marking ("To mark"), class name lists, and the link to a teacher's own gradebook scoresheet.
+
+   The scoresheet is the Google Sheets "Gradebook" template: on its Grades tab, class numbers are in
+   column A and names in column B from row 6; each assignment is a column with its title in row 2 and
+   full marks in row 3; the template's formulas only cover columns D–AA and rows 6–45. Writing is
+   deliberately careful: the teacher sees a preview first, the app only ever fills a column that is
+   completely empty, never touches rows 4–5 (the averages) or any cell with something in it, and stops
+   when the gradebook is full instead of writing outside the formulas. */
+
+var GRADEBOOK = { tab: "Grades", titleRow: 2, pointsRow: 3, firstRow: 6, lastRow: 45, firstCol: 4, lastCol: 27, noCol: 1, nameCol: 2 };
+var HAND_IN_TEXT = { L: "Late", A: "Absent", M: "Missing" };
+var SHEET_ID_PATTERN = /^[A-Za-z0-9_-]{20,100}$/;
+
+// ---------- name lists ----------
+function rostersByClass_() {
+  var byClass = {};
+  readTab_("Students").forEach(function (s) {
+    (byClass[s.classId] = byClass[s.classId] || []).push({ no: Number(s.no), name: s.name });
+  });
+  Object.keys(byClass).forEach(function (k) { byClass[k].sort(function (a, b) { return a.no - b.no; }); });
+  return byClass;
+}
+
+function requireClass_(classId) {
+  if (!classIdSet_()[classId]) throw new UserError_("That class isn't in your list any more. Please reload the page.");
+}
+
+function writeRoster_(classId, roster) {
+  var others = readTab_("Students").filter(function (s) { return s.classId !== classId; });
+  replaceTab_("Students", others.concat(roster.map(function (s) { return { classId: classId, no: s.no, name: s.name }; })));
+}
+
+function saveRoster(classId, list) {
+  return respond_(function () {
+    return withLock_(function () {
+      requireClass_(classId);
+      var roster = cleanRoster_(list);
+      writeRoster_(classId, roster);
+      return { classId: classId, roster: roster };
+    });
+  });
+}
+
+// ---------- marking ----------
+function saveMark(mark) {
+  return respond_(function () {
+    return withLock_(function () {
+      var clean = cleanMark_(mark, classIdSet_(), today_());
+      var existing = readTab_("Marks").filter(function (m) { return m.id === clean.id; })[0];
+      if (!existing && readTab_("Marks").length >= LIMITS.marks) throw new UserError_("You've reached the limit of " + LIMITS.marks + " marking items. Delete some finished ones first.");
+      // Which scoresheet column it was written to is the web app's own record, never the page's.
+      if (existing) clean.sheetCol = existing.sheetCol || "";
+      return { mark: upsert_("Marks", idKey_, clean) };
+    });
+  });
+}
+
+function deleteMark(id) {
+  return respond_(function () {
+    return withLock_(function () { return { removed: remove_("Marks", idKey_, cleanId_(id)) }; });
+  });
+}
+
+// ---------- scoresheet ----------
+function sheetIdFrom_(text) {
+  var s = String(text || "").trim();
+  var m = s.match(/\/spreadsheets\/d\/([A-Za-z0-9_-]{20,100})/);
+  var id = m ? m[1] : s;
+  if (!SHEET_ID_PATTERN.test(id)) throw new UserError_("That doesn't look like a Google Sheets link. Copy the address from the scoresheet's browser tab.");
+  return id;
+}
+
+function openGradebook_(id) {
+  var book;
+  try {
+    book = SpreadsheetApp.openById(id);
+  } catch (e) {
+    console.warn("Scoresheet " + id + " could not be opened: " + (e && e.message || e));
+    throw new UserError_("The app can't open that scoresheet. In the scoresheet, press Share and add " +
+      Session.getEffectiveUser().getEmail() + " as an Editor, then try again. If your school doesn't allow that, use Copy column instead.");
+  }
+  var sheet = book.getSheetByName(GRADEBOOK.tab);
+  if (!sheet) throw new UserError_("That scoresheet has no tab called “" + GRADEBOOK.tab + "”. The app works with the Gradebook template.");
+  return sheet;
+}
+
+function gradebookRows_() { return GRADEBOOK.lastRow - GRADEBOOK.firstRow + 1; }
+
+// The students listed on the Grades tab: [{no, name, row}].
+function gradebookRoster_(sheet) {
+  var values = sheet.getRange(GRADEBOOK.firstRow, 1, gradebookRows_(), GRADEBOOK.nameCol).getValues();
+  var list = [];
+  values.forEach(function (r, i) {
+    var no = Number(r[GRADEBOOK.noCol - 1]);
+    var name = String(r[GRADEBOOK.nameCol - 1] || "").trim();
+    if (no >= 1 && no <= 99 && Math.floor(no) === no && name) list.push({ no: no, name: name.slice(0, LIMITS.studentName), row: GRADEBOOK.firstRow + i });
+  });
+  return list;
+}
+
+function scoresheetIdFor_(classId) {
+  var id = (readSettings_().scoresheets || {})[classId];
+  if (!id) throw new UserError_("This class has no scoresheet linked yet. Add it in Settings → Name lists.");
+  return id;
+}
+
+// Links a class to its scoresheet and takes the class's name list from it.
+function linkScoresheet(classId, link) {
+  return respond_(function () {
+    return withLock_(function () {
+      requireClass_(classId);
+      var id = sheetIdFrom_(link);
+      var roster = gradebookRoster_(openGradebook_(id)).map(function (s) { return { no: s.no, name: s.name }; });
+      if (!roster.length) throw new UserError_("No students were found on the Grades tab (class numbers in column A and names in column B, from row 6).");
+      var clean = cleanRoster_(roster);
+      var sheets = Object.assign({}, readSettings_().scoresheets || {});
+      sheets[classId] = id;
+      writeSetting_("scoresheets", sheets);
+      writeRoster_(classId, clean);
+      return { classId: classId, roster: clean };
+    });
+  });
+}
+
+function unlinkScoresheet(classId) {
+  return respond_(function () {
+    return withLock_(function () {
+      var sheets = Object.assign({}, readSettings_().scoresheets || {});
+      delete sheets[classId];
+      writeSetting_("scoresheets", sheets);
+      return { classId: classId };
+    });
+  });
+}
+
+function columnLetter_(n) {
+  var s = "";
+  for (; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
+  return s;
+}
+
+function cellIsBlank_(value, formula) { return (value === "" || value === null) && !formula; }
+
+// The first assignment column whose title, full marks and every student cell are all empty.
+function emptyGradebookColumn_(sheet) {
+  var width = GRADEBOOK.lastCol - GRADEBOOK.firstCol + 1;
+  var head = sheet.getRange(GRADEBOOK.titleRow, GRADEBOOK.firstCol, 2, width);
+  var body = sheet.getRange(GRADEBOOK.firstRow, GRADEBOOK.firstCol, gradebookRows_(), width);
+  var hv = head.getValues(), hf = head.getFormulas(), bv = body.getValues(), bf = body.getFormulas();
+  for (var c = 0; c < width; c++) {
+    var blank = [0, 1].every(function (r) { return cellIsBlank_(hv[r][c], hf[r][c]); }) &&
+      bv.every(function (row, r) { return cellIsBlank_(row[c], bf[r][c]); });
+    if (blank) return GRADEBOOK.firstCol + c;
+  }
+  return 0;
+}
+
+function cleanFullMarks_(value) {
+  if (value === undefined || value === null || value === "") return "";
+  var n = Number(value);
+  if (!(n > 0 && n <= 1000)) throw new UserError_("Full marks must be a number from 1 to 1000.");
+  return n;
+}
+
+// What a write would do, without doing it.
+function scoresheetPlan_(markId, fullMarks) {
+  var mark = readTab_("Marks").filter(function (m) { return m.id === markId; })[0];
+  if (!mark) throw new UserError_("That marking item isn't there any more. Please reload the page.");
+  if (!mark.classId) throw new UserError_("Choose the class for this marking first.");
+  if (mark.sheetCol) throw new UserError_("This marking was already written to column " + mark.sheetCol + " of the scoresheet.");
+  var sheet = openGradebook_(scoresheetIdFor_(mark.classId));
+  var col = emptyGradebookColumn_(sheet);
+  if (!col) throw new UserError_("The scoresheet's assignment columns (D to AA) are all used, so nothing was written. Make room there, or start a new gradebook.");
+  var roster = gradebookRoster_(sheet);
+  var students = mark.students || {};
+  var inSheet = Object.create(null);
+  var cells = roster.map(function (s) {
+    inSheet[s.no] = true;
+    var st = students[String(s.no)] || {};
+    return { row: s.row, no: s.no, name: s.name, value: HAND_IN_TEXT[st.s] || "", unrecorded: !st.s };
+  });
+  return {
+    mark: mark, sheet: sheet, col: col, column: columnLetter_(col),
+    title: mark.title + (mark.collected ? " (" + logic_().shortDate(mark.collected) + ")" : ""),
+    fullMarks: cleanFullMarks_(fullMarks),
+    cells: cells,
+    missingFromSheet: Object.keys(students).filter(function (no) { return !inSheet[no]; }).map(Number)
+  };
+}
+
+function previewScoresheet(markId, fullMarks) {
+  return respond_(function () {
+    var plan = scoresheetPlan_(cleanId_(markId), fullMarks);
+    return {
+      column: plan.column, title: plan.title, fullMarks: plan.fullMarks,
+      cells: plan.cells.map(function (c) { return { no: c.no, name: c.name, value: c.value, unrecorded: c.unrecorded }; }),
+      missingFromSheet: plan.missingFromSheet
+    };
+  });
+}
+
+// Writes only after the teacher saw the preview for this exact column; if the sheet changed since
+// (someone typed in that column), nothing is written and they're asked to look again.
+function writeScoresheet(markId, column, fullMarks) {
+  return respond_(function () {
+    return withLock_(function () {
+      var plan = scoresheetPlan_(cleanId_(markId), fullMarks);
+      if (plan.column !== column) throw new UserError_("The scoresheet changed since the preview (column " + column + " isn't empty any more). Please preview again.");
+      // As plain text, so a title like "1/2" or "=x" isn't turned into a date or formula.
+      plan.sheet.getRange(GRADEBOOK.titleRow, plan.col).setNumberFormat("@").setValue(plan.title);
+      if (plan.fullMarks !== "") plan.sheet.getRange(GRADEBOOK.pointsRow, plan.col).setValue(plan.fullMarks);
+      var written = 0;
+      plan.cells.forEach(function (c) {
+        if (!c.value) return;
+        plan.sheet.getRange(c.row, plan.col).setValue(c.value);
+        written++;
+      });
+      var saved = upsert_("Marks", idKey_, Object.assign({}, plan.mark, { sheetCol: plan.column }));
+      return { mark: saved, column: plan.column, written: written };
+    });
+  });
 }

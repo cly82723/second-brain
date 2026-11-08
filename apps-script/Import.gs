@@ -13,7 +13,7 @@ function importData(payload) {
       var plans = {
         Log: planMerge_("Log", logKey_, payload.log, function (e) { return cleanLogEntry_(e, classIds); }, LIMITS.importRows),
         Events: planMerge_("Events", idKey_, payload.events, function (e) { return cleanEvent_(e, spec.cycleLength); }, LIMITS.events),
-        Todos: planMerge_("Todos", idKey_, payload.todos, function (t) { return cleanTodo_(t, classIds, today_()); }, LIMITS.todos)
+        Todos: planMerge_("Todos", idKey_, payload.todos, function (t) { return cleanTodo_(t, classIds, today_(), categoryIdSet_()); }, LIMITS.todos)
       };
       // Everything checked: now write.
       if (setup) writeSetup_(setup);

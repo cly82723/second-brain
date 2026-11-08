@@ -17,7 +17,7 @@ function setUp(s, extra = {}) {
   const res = s.call("saveSetup", Object.assign({
     schoolId: "kings-college-2026",
     periods,
-    classes: [{ id: "c-3d", name: "3D English", colour: "sage" }, { id: "c-1b", name: "1B English", colour: "sky" }],
+    classes: [{ id: "c-3d", name: "3D English", colour: "sage" }, { id: "c-1b", name: "S1E2 English", colour: "sky" }],
     timetable: [
       { day: 7, period: "P6", classId: "c-3d" }, { day: 1, period: "P1", classId: "c-3d" }, { day: 1, period: "P2", classId: "c-3d" },
       { day: 1, period: "P4", classId: "c-1b" }, { day: 2, period: "P6", classId: "c-3d" }
@@ -33,7 +33,7 @@ test("first use makes the data sheet and starts with setup not done", () => {
   assert.strictEqual(res.ok, true);
   assert.strictEqual(res.data.settings.setupDone, false);
   assert.ok(s.book());
-  assert.deepStrictEqual(s.book().sheets.map(x => x.name), ["Settings", "Classes", "Timetable", "Log", "Events", "Todos"]);
+  assert.deepStrictEqual(s.book().sheets.map(x => x.name), ["Settings", "Classes", "Timetable", "Log", "Events", "Todos", "Marks", "Students"]);
 });
 
 test("setup saves classes and timetable, and lessons follow the cycle", () => {
@@ -44,7 +44,7 @@ test("setup saves classes and timetable, and lessons follow the cycle", () => {
   const L = s.ctx.logic_();
   const ctx = L.prepare(data);
   const fri = L.lessonsOn(ctx, "2026-11-06"); // Day 1
-  assert.deepStrictEqual(plain(fri).map(l => [l.cls.name, l.periodText, l.lengthText]), [["3D English", "P1–P2", "Double"], ["1B English", "P4", "Single"]]);
+  assert.deepStrictEqual(plain(fri).map(l => [l.cls.name, l.periodText, l.lengthText]), [["3D English", "P1–P2", "Double"], ["S1E2 English", "P4", "Single"]]);
   assert.strictEqual(L.lessonsOn(ctx, "2026-11-16").length, 0); // holiday
 });
 
@@ -93,19 +93,26 @@ test("a class with entries can't be deleted, only taken off the timetable", () =
     classes: [{ id: "c-3d", name: "3D English", colour: "sage" }], timetable: []
   });
   assert.strictEqual(res.ok, false);
-  assert.match(res.error, /1B English already has logbook entries/);
+  assert.match(res.error, /S1E2 English already has logbook entries/);
 });
 
-test("didn't finish: ticks this lesson and puts the rest at the top of the class's next lesson", () => {
+test("didn't finish: ticks this lesson and the rest shows as a follow-up on the class's next lesson", () => {
   const s = loadServer({ now: THU_NOON });
   setUp(s);
-  s.call("saveLog", { date: "2026-11-09", classId: "c-3d", plan: "Already planned" });
   // 3D: Thu 5 Nov is Day 7, next is Fri 6 Nov (Day 1).
   const res = s.call("carryForward", { entry: { date: "2026-11-05", classId: "c-3d", plan: "Unit 3 reading" }, leftover: "Finish text 2" });
   assert.strictEqual(res.ok, true, res.error);
   assert.strictEqual(res.data.current.done, true);
-  assert.strictEqual(res.data.next.date, "2026-11-06");
-  assert.strictEqual(res.data.next.plan, "From Thu 5 Nov: Finish text 2");
+  assert.strictEqual(res.data.current.followUp, "Finish text 2");
+  assert.strictEqual(res.data.nextDate, "2026-11-06");
+  const L = s.ctx.logic_();
+  const ctx = L.prepare(s.call("getAll").data);
+  const fri = plain(L.lessonsOn(ctx, "2026-11-06")).find(l => l.classId === "c-3d");
+  assert.deepStrictEqual(fri.followUps.map(e => e.followUp), ["Finish text 2"]);
+  // Ticked off at the next lesson, it no longer shows.
+  s.call("saveLog", Object.assign({}, res.data.current, { followUpDone: true }));
+  const after = L.prepare(s.call("getAll").data);
+  assert.deepStrictEqual(plain(L.lessonsOn(after, "2026-11-06")).find(l => l.classId === "c-3d").followUps, []);
 });
 
 test("an event that replaces lessons takes over only the periods it overlaps", () => {
@@ -151,7 +158,7 @@ test("not updated lists ended lessons that weren't ticked, since the teacher sta
   s.call("saveLog", { date: "2026-11-06", classId: "c-3d", plan: "x" });
   const L = s.ctx.logic_();
   const ctx = L.prepare(s.call("getAll").data);
-  // Friday 6 Nov at 10:00: 3D (P1-P2) has ended, 1B (P4) hasn't.
+  // Friday 6 Nov at 10:00: 3D (P1-P2) has ended, S1E2 (P4) hasn't.
   const list = L.notUpdated(ctx, "2026-11-05", "2026-11-06", 10 * 60);
   assert.deepStrictEqual(plain(list).map(l => l.date + " " + l.cls.name), ["2026-11-05 3D English", "2026-11-06 3D English"]);
 });
@@ -255,7 +262,7 @@ test("an import over the limits changes nothing", () => {
   const events = Array.from({ length: 2001 }, (_, i) => ({ title: "E" + i, date: "2026-11-06" }));
   const res = s.call("importData", { format: "teachers-second-brain", classes: [{ id: "c-x", name: "New class", colour: "sky" }], timetable: [], events });
   assert.strictEqual(res.ok, false);
-  assert.deepStrictEqual(s.call("getAll").data.classes.map(c => c.name), ["3D English", "1B English"]);
+  assert.deepStrictEqual(s.call("getAll").data.classes.map(c => c.name), ["3D English", "S1E2 English"]);
 });
 
 const KEY = "a".repeat(64);

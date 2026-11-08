@@ -59,15 +59,79 @@ function logic_() {
       (timetableByDay[t.day] = timetableByDay[t.day] || []).push(t);
     });
     var logByKey = Object.create(null);
-    (data.log || []).forEach(function (e) { logByKey[e.date + "|" + e.classId] = e; });
+    // Follow-ups still open, per class, oldest first; homework by the day it's handed in.
+    var followUpsByClass = Object.create(null);
+    var collectByKey = Object.create(null);
+    (data.log || []).forEach(function (e) {
+      logByKey[e.date + "|" + e.classId] = e;
+      if (e.followUp && !e.followUpDone && classById[e.classId]) (followUpsByClass[e.classId] = followUpsByClass[e.classId] || []).push(e);
+      if (e.homework && e.homeworkDue && classById[e.classId]) (collectByKey[e.homeworkDue + "|" + e.classId] = collectByKey[e.homeworkDue + "|" + e.classId] || []).push(e);
+    });
+    Object.keys(followUpsByClass).forEach(function (k) { followUpsByClass[k].sort(function (a, b) { return a.date < b.date ? -1 : 1; }); });
+    var categories = data.categories || [];
+    var categoryById = Object.create(null);
+    categories.forEach(function (c) { categoryById[c.id] = c; });
     return {
       school: data.school, periods: periods, periodIndex: periodIndex, classes: data.classes || [],
       classById: classById, timetableByDay: timetableByDay, logByKey: logByKey,
-      log: data.log || [], events: data.events || [], todos: data.todos || []
+      followUpsByClass: followUpsByClass, collectByKey: collectByKey, followUpTargets: Object.create(null),
+      today: data.today || "",
+      categories: categories, categoryById: categoryById, rosters: data.rosters || {},
+      log: data.log || [], events: data.events || [], todos: data.todos || [], marks: data.marks || []
     };
   }
 
+  // Students still missing from marking collected before that day: chase them at the class's lesson.
+  function chaseFor(ctx, classId, date) {
+    var roster = ctx.rosters[classId] || [];
+    var nameOf = Object.create(null);
+    roster.forEach(function (s) { nameOf[s.no] = s.name; });
+    return ctx.marks.filter(function (m) { return !m.done && m.classId === classId && m.collected && m.collected < date; })
+      .map(function (m) {
+        var missing = markProgress(m).missing;
+        return { mark: m, names: missing.map(function (no) { return nameOf[no] || "No. " + no; }) };
+      })
+      .filter(function (c) { return c.names.length; });
+  }
+
   function entryFor(ctx, date, classId) { return ctx.logByKey[date + "|" + classId] || null; }
+
+  // Whether the class is really taught that day: on the timetable, and not replaced by an event.
+  function classOn(ctx, classId, date) {
+    var cycleDay = dayInfo(ctx.school, date).cycleDay;
+    if (!cycleDay) return false;
+    var periods = (ctx.timetableByDay[cycleDay] || []).filter(function (t) { return t.classId === classId; })
+      .map(function (t) { return ctx.periods[ctx.periodIndex[t.period]]; });
+    if (!periods.length) return false;
+    return !eventsOn(ctx, date).some(function (ev) {
+      return ev.replaces && periods.some(function (p) { return overlaps(ev, p.start, p.end); });
+    });
+  }
+
+  // The lesson a follow-up belongs to: the class's next lesson after it was written, or, once that
+  // has passed without a tick, the next one from today. So it sits on one lesson at a time.
+  function followUpTarget(ctx, e) {
+    var from = addDays(e.date, 1);
+    if (ctx.today && ctx.today > from) from = ctx.today;
+    for (var i = 0; i <= LOOKAHEAD_DAYS; i++) {
+      var d = addDays(from, i);
+      if (classOn(ctx, e.classId, d)) return d;
+    }
+    return null;
+  }
+
+  // What a lesson should pick up from earlier ones: follow-ups not yet ticked.
+  function followUpsFor(ctx, classId, date) {
+    return (ctx.followUpsByClass[classId] || []).filter(function (e) {
+      if (!(e.date < date)) return false;
+      var key = e.date + "|" + e.classId;
+      if (!(key in ctx.followUpTargets)) ctx.followUpTargets[key] = followUpTarget(ctx, e);
+      return ctx.followUpTargets[key] === date;
+    });
+  }
+
+  // Homework that this class hands in on that day.
+  function collectFor(ctx, date, classId) { return ctx.collectByKey[date + "|" + classId] || []; }
 
   // ---- events ----
   function occursOn(ctx, ev, date) {
@@ -117,7 +181,9 @@ function logic_() {
         date: date, cycleDay: info.cycleDay, classId: classId, cls: ctx.classById[classId],
         periods: periods, periodText: periodText(periods), lengthText: lengthWord(periods.length),
         start: periods[0].start, end: periods[periods.length - 1].end,
-        entry: entryFor(ctx, date, classId), replacedBy: replacedBy
+        entry: entryFor(ctx, date, classId), replacedBy: replacedBy,
+        followUps: followUpsFor(ctx, classId, date), collect: collectFor(ctx, date, classId),
+        chase: chaseFor(ctx, classId, date)
       };
     });
   }
@@ -136,7 +202,7 @@ function logic_() {
   }
 
   function hasWriting(entry) {
-    return !!(entry.plan || entry.remind || entry.homework || entry.notes);
+    return !!(entry.plan || entry.covered || entry.followUp || entry.remind || entry.homework || entry.notes);
   }
 
   function teachesOn(ctx, date, classId) {
@@ -180,6 +246,44 @@ function logic_() {
 
   function openTodos(ctx) { return ctx.todos.filter(function (t) { return !t.done; }); }
 
+  function openMarks(ctx) { return ctx.marks.filter(function (m) { return !m.done; }); }
+
+  // Things with no date that probably need one: open to-dos, homework, and marking.
+  function undated(ctx) {
+    return {
+      todos: openTodos(ctx).filter(function (t) { return !t.due; }),
+      homework: ctx.log.filter(function (e) { return e.homework && !e.homeworkDue && ctx.classById[e.classId]; })
+        .sort(function (a, b) { return a.date < b.date ? 1 : -1; }),
+      marks: openMarks(ctx).filter(function (m) { return !m.due; })
+    };
+  }
+
+  function undatedCount(u) { return u.todos.length + u.homework.length + u.marks.length; }
+
+  // Marking still to do, soonest return date first (undated last).
+  function marksByDue(ctx) {
+    return openMarks(ctx).slice().sort(function (a, b) {
+      if (!a.due !== !b.due) return a.due ? -1 : 1;
+      return a.due < b.due ? -1 : a.due > b.due ? 1 : 0;
+    });
+  }
+
+  function marksDueOn(ctx, date) { return openMarks(ctx).filter(function (m) { return m.due === date; }); }
+
+  // How far through a marking pile: from the name list when there is one, otherwise the counts typed.
+  function markProgress(mark) {
+    var students = mark.students || {};
+    var ids = Object.keys(students);
+    if (ids.length) {
+      var handedIn = ids.filter(function (k) { return students[k].s === "S" || students[k].s === "L"; });
+      var marked = handedIn.filter(function (k) { return students[k].m; }).length;
+      var missing = ids.filter(function (k) { return students[k].s === "M"; });
+      return { total: handedIn.length, marked: marked, missing: missing, fromList: true };
+    }
+    var total = Number(mark.scripts) || 0;
+    return { total: total, marked: Math.min(Number(mark.marked) || 0, total || Infinity), missing: [], fromList: false };
+  }
+
   // To-dos sorted into the groups the To-dos page shows.
   function groupTodos(ctx, today) {
     var weekEnd = addDays(today, 7);
@@ -216,6 +320,44 @@ function logic_() {
     return openTodos(ctx).filter(function (t) { return t.due === date; });
   }
 
+  // ---- day strip ----
+  // The rows of a day from 7:40 to 18:00: one row before school, the school's own periods (lessons,
+  // recess, lunch at their real times), then 40-minute rows after school.
+  var STRIP_START = "07:40", STRIP_END = "18:00", AFTER_SCHOOL_MINUTES = 40;
+  function clock(mins) { var h = Math.floor(mins / 60), m = mins % 60; return (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m; }
+
+  function stripRows(periods) {
+    var sorted = (periods || []).slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+    var rows = [];
+    var t = STRIP_START;
+    sorted.forEach(function (p) {
+      if (p.end <= STRIP_START || p.start >= STRIP_END) return;
+      if (p.start > t) rows.push({ start: t, end: p.start, label: rows.length ? "" : "Before school", kind: "open" });
+      rows.push({ start: p.start, end: p.end, label: p.label, kind: p.teaching ? "period" : "break", period: p.id });
+      if (p.end > t) t = p.end;
+    });
+    for (var m = minutes(t); m < minutes(STRIP_END); m += AFTER_SCHOOL_MINUTES) {
+      var end = Math.min(m + AFTER_SCHOOL_MINUTES, minutes(STRIP_END));
+      rows.push({ start: clock(m), end: clock(end), label: sorted.length ? "After school" : "", kind: "open" });
+    }
+    return rows.filter(function (r) { return r.start < r.end; });
+  }
+
+  // A day with lessons (a cycle day, or a weekday at a Mon–Fri school).
+  function nextSchoolDay(ctx, date) {
+    for (var i = 1; i <= 60; i++) {
+      var d = addDays(date, i);
+      if (dayInfo(ctx.school, d).cycleDay) return d;
+    }
+    return null;
+  }
+
+  function schoolDaysAfter(ctx, date, count) {
+    var found = [];
+    for (var d = nextSchoolDay(ctx, date); d && found.length < count; d = nextSchoolDay(ctx, d)) found.push(d);
+    return found;
+  }
+
   function findCycleDay(ctx, cycleDay, fromDate) {
     for (var i = 0; i <= 400; i++) {
       var date = addDays(fromDate, i);
@@ -233,10 +375,12 @@ function logic_() {
     var events = eventsOn(ctx, tomorrow);
     var due = todosDueOn(ctx, tomorrow);
     var homework = homeworkDueOn(ctx, tomorrow);
-    if (!lessons.length && !events.length && !due.length && !homework.length) return null;
+    var marks = marksDueOn(ctx, tomorrow);
+    if (!lessons.length && !events.length && !due.length && !homework.length && !marks.length) return null;
     var leftToday = notUpdated(ctx, since, today, 24 * 60).filter(function (l) { return l.date === today; });
     return {
       date: tomorrow, info: info, lessons: lessons, events: events, todosDue: due, homeworkDue: homework,
+      marksDue: marks, overdueMarks: openMarks(ctx).filter(function (m) { return m.due && m.due <= today; }),
       overdue: openTodos(ctx).filter(function (t) { return t.due && t.due <= today; }),
       leftToday: leftToday
     };
@@ -249,6 +393,9 @@ function logic_() {
     entryFor: entryFor, eventsOn: eventsOn, occursOn: occursOn, lessonsOn: lessonsOn, lessonStatus: lessonStatus,
     hasWriting: hasWriting, nextLesson: nextLesson, previousLesson: previousLesson, notUpdated: notUpdated,
     homeworkDueOn: homeworkDueOn, groupTodos: groupTodos, todosDueOn: todosDueOn, weekDays: weekDays,
-    findCycleDay: findCycleDay, digest: digest
+    findCycleDay: findCycleDay, digest: digest, followUpsFor: followUpsFor, collectFor: collectFor,
+    undated: undated, undatedCount: undatedCount, openMarks: openMarks, marksByDue: marksByDue,
+    marksDueOn: marksDueOn, markProgress: markProgress, chaseFor: chaseFor, stripRows: stripRows,
+    nextSchoolDay: nextSchoolDay, schoolDaysAfter: schoolDaysAfter
   };
 }

@@ -13,9 +13,19 @@ anyone with it can open the notebook. This repo holds code only, never notes.
 
 ## Screens
 
-Today · Calendar (Mon–Fri weeks with cycle days; weekends only when something's on) · Classes (one
-timeline per class, with search) · To-dos · Settings (school, classes, timetable, period times,
-evening email, Excel export, import, personal link).
+- **Today**: a day strip from 7:40 to 18:00 laid out by the school's periods (40-minute rows after
+  school), your own items in it (tap a free period to add one), follow-ups, homework to collect and
+  students to chase on each lesson, and the next five school days underneath. On Saturday and
+  Sunday: the weekend, then a preview of the next school day. Side column: to-dos (with category and
+  date), To mark, homework due ("Collected → To mark"), not updated, and anything that needs a date.
+- **Calendar**: *My week* as a time grid (Day | Week on a phone) and *School year*, month by month
+  with cycle days, holidays, exams and events.
+- **Classes**: each lesson's Plan and Covered side by side, Follow up next lesson highlighted.
+- **Tasks**: to-dos by category, and To mark (hand-ins per student, marked progress, scoresheet).
+- **Settings**: school, classes, timetable, period times, to-do categories, name lists and
+  scoresheets, evening email, Excel export, import, personal link.
+
+Undated to-dos, homework and marking are asked about once a day when the app opens.
 
 ## Setting up the web app (once)
 
@@ -44,9 +54,12 @@ index.html, styles.css    the page
 core/logic.js             calendar rules, shared by the page and the web app
 core/remote.js            talking to the web app (secret code, requests)
 core/export.js            Excel export, made in the browser
-app/                      screens: app.js, views.js, editors.js, settings.js, connect.js (locked screen)
+app/                      screens: app.js (shell), views.js (shared pieces, Classes), today.js,
+                          calendar.js, tasks.js (to-dos, To mark, undated prompt), marking.js,
+                          editors.js, settings.js, connect.js (locked screen)
 apps-script/              the web app: Code.gs (requests, secret code), Store.gs (Sheet),
-                          Validate.gs, Schools.gs (school calendars), Import.gs, Email.gs
+                          Validate.gs, Schools.gs (school calendars), Import.gs, Email.gs,
+                          Marking.gs (marking, name lists, scoresheet)
 apps-script/dist/         the same, joined into one file to paste (generated)
 tests/                    node --test tests/
 tools/                    build-apps-script.js, preview.js, import-docx.js
@@ -62,6 +75,22 @@ node tools/preview.js 8331 --locked   # the locked screen
 
 The demo uses the converted Word log from `../teachers-second-brain/data/yau-2026-27.json` on this
 computer (personal, so not in this repo).
+
+## Linking a class's scoresheet
+
+The app works with the Google Sheets **Gradebook** template (Grades tab: class numbers in column A,
+names in column B from row 6, assignment titles in row 2, full marks in row 3, formulas covering
+columns D–AA and rows 6–45).
+
+1. The scoresheet must be editable by the account the web app runs as. If it belongs to a school
+   account, **Share** it with that Gmail account as an **Editor**.
+2. **Settings → Name lists → Link scoresheet**, paste its link. The class's names are read from it.
+3. On a marking item: **Preview** shows the column it would fill and what it would write; **Write**
+   does it. Only students who didn't hand in on time get a word (Late, Absent, Missing); everyone
+   else's cell stays empty for the score. It only ever uses a completely empty column, never touches
+   rows 4–5 or a filled cell, and stops when D–AA are full.
+4. If the school blocks sharing, use **Copy title & full marks** (paste at row 2 of an empty column)
+   and **Copy hand-ins** (paste at row 6 of the same column) instead.
 
 ## Giving another teacher their own notebook
 

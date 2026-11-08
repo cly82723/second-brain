@@ -4,8 +4,8 @@
    fetched the first time someone exports. */
 
 var EXPORT_MAX_DAYS = 400;
-var EXPORT_HEADERS = ["Date", "Day", "Periods", "Plan / covered", "Remind students", "Homework", "Homework due", "Notes", "Done"];
-var EXPORT_WIDTHS = [16, 9, 9, 48, 30, 32, 14, 30, 7]; // in characters
+var EXPORT_HEADERS = ["Date", "Day", "Periods", "Plan", "Covered", "Follow up next lesson", "Remind students", "Homework", "Homework due", "Notes", "Done"];
+var EXPORT_WIDTHS = [16, 9, 9, 40, 40, 30, 26, 30, 14, 28, 7]; // in characters
 var XLSX_SRC = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
 
 // Resolves to {url, filename, lessons}, or rejects with a message to show.
@@ -62,7 +62,8 @@ function exportRow(ctx, lesson) {
     L.shortDate(lesson.date) + " " + lesson.date.slice(0, 4),
     L.cycleName(ctx.school, lesson.cycleDay),
     lesson.periodText,
-    e.plan || "", e.remind || "", e.homework || "",
+    e.plan || "", e.covered || "", e.followUp ? e.followUp + (e.followUpDone ? " (done)" : "") : "",
+    e.remind || "", e.homework || "",
     e.homeworkDue ? L.shortDate(e.homeworkDue) : "",
     notes,
     e.done ? "Yes" : ""

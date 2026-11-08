@@ -81,7 +81,7 @@ function renderSettings() {
         onclick: function () { App.setupDraft = null; render(); } }, "Undo"),
       el("button", { type: "button", class: "btn", onclick: function (e) { saveSetupDraft(e.currentTarget); } }, setup ? "Start using the app" : "Save")
     ])
-  ].concat(setup ? [importPanel()] : [emailPanel(), exportPanel(), importPanel(), dataPanel()])));
+  ].concat(setup ? [importPanel()] : [categoriesPanel(), namesPanel(), emailPanel(), exportPanel(), importPanel(), dataPanel()])));
   return el("div", { class: "page" }, parts);
 }
 
@@ -223,6 +223,46 @@ function periodsPanel(d) {
 function addMinutes(time, mins) {
   var total = Math.min(23 * 60 + 59, L.minutes(time) + mins);
   return pad(Math.floor(total / 60)) + ":" + pad(total % 60);
+}
+
+// ---------- to-do categories ----------
+function categoriesPanel() {
+  var list = App.ctx.categories.map(function (c) { return Object.assign({}, c); });
+  var holder = el("div");
+  var save = el("button", { type: "button", class: "btn btn-ink btn-sm" }, "Save categories");
+  function draw() {
+    holder.replaceChildren.apply(holder, list.map(function (c, i) {
+      return el("div", { class: "class-row" }, [
+        el("div", { class: "swatches", role: "group", "aria-label": "Colour" }, App.data.colours.map(function (col) {
+          return el("button", { type: "button", class: "swatch c-" + col, "aria-label": col, "aria-pressed": c.colour === col ? "true" : "false",
+            onclick: function () { list[i] = Object.assign({}, c, { colour: col }); draw(); } });
+        })),
+        textInput(c.name, { maxlength: "30", "aria-label": "Category name", oninput: function (e) { list[i] = Object.assign({}, list[i], { name: e.target.value }); } }),
+        el("button", { type: "button", class: "btn btn-quiet icon-btn", "aria-label": "Remove " + c.name, onclick: function () { list.splice(i, 1); draw(); } }, icon("close"))
+      ]);
+    }));
+  }
+  draw();
+  save.addEventListener("click", function () {
+    var clean = list.filter(function (c) { return c.name.trim(); });
+    busy(save, api("saveCategories", clean)).then(function (res) {
+      setData(Object.assign({}, App.data, { categories: res.categories }));
+      toast("Categories saved.");
+    }, fail);
+  });
+  return el("section", { class: "panel" }, [
+    el("div", { class: "panel-head" }, [el("h2", {}, "To-do categories"), el("span", { class: "hint" }, "optional on every to-do")]),
+    holder,
+    el("div", { class: "row", style: "margin-top:8px" }, [
+      el("button", { type: "button", class: "btn btn-sm", onclick: function () {
+        list.push({ id: "k" + Math.random().toString(36).slice(2, 9), name: "", colour: App.data.colours[list.length % App.data.colours.length] });
+        draw();
+        var inputs = holder.querySelectorAll(".input");
+        if (inputs.length) inputs[inputs.length - 1].focus();
+      } }, "+ Add a category"),
+      save
+    ])
+  ]);
 }
 
 // ---------- email ----------

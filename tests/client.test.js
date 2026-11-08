@@ -84,14 +84,14 @@ test("export: one tab per class plus All classes, every lesson listed, text kept
   const p = page({ stored: KEY, xlsx });
   await p.B.call("saveSetup", [{
     schoolId: "kings-college-2026", periods: p.server.ctx.STANDARD_PERIODS,
-    classes: [{ id: "c-3d", name: "'3D' English", colour: "sage" }, { id: "c-1b", name: "1B English", colour: "sky" }],
+    classes: [{ id: "c-3d", name: "'3D' English", colour: "sage" }, { id: "c-1b", name: "S1E2 English", colour: "sky" }],
     timetable: [{ day: 7, period: "P6", classId: "c-3d" }, { day: 1, period: "P1", classId: "c-3d" }, { day: 1, period: "P4", classId: "c-1b" }]
   }]);
   await p.B.call("saveLog", [{ date: "2026-11-06", classId: "c-3d", plan: "1/2", done: true }]);
   const data = await p.B.call("getAll");
   const res = await p.ctx.exportExcel(data, { from: "2026-11-02", to: "2026-11-06", classIds: ["c-3d", "c-1b"] });
   assert.strictEqual(res.filename, "Logbook 2026-11-02 to 2026-11-06.xlsx");
-  assert.deepStrictEqual(sheets.map((s) => s.name), ["3D' English", "1B English", "All classes"]);
+  assert.deepStrictEqual(sheets.map((s) => s.name), ["3D' English", "S1E2 English", "All classes"]);
   assert.deepStrictEqual(sheets[0].rows.slice(1).map((r) => r[0]), ["Thu 5 Nov 2026", "Fri 6 Nov 2026"]);
   assert.strictEqual(sheets[0].rows[2][3], "1/2");
   await assert.rejects(p.ctx.exportExcel(data, { from: "2026-11-06", to: "2026-11-02", classIds: ["c-3d"] }), /on or after/);

@@ -4,7 +4,7 @@
    Everything typed by a teacher is put on screen with textContent (via el), never as HTML. */
 "use strict";
 
-var App = { data: null, ctx: null, view: "today", param: "", todayPane: "lessons", classSearch: "" };
+var App = { data: null, ctx: null, view: "today", param: "", todayPane: "lessons", classSearch: "", todoFilter: "", calPhone: "day", calDay: "", yearMine: false };
 
 var ICONS = {
   today: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
@@ -22,7 +22,7 @@ var NAV = [
   { id: "today", label: "Today" },
   { id: "week", label: "Calendar" },
   { id: "classes", label: "Classes" },
-  { id: "todos", label: "To-dos" },
+  { id: "todos", label: "Tasks" },
   { id: "settings", label: "Settings" }
 ];
 
@@ -333,8 +333,9 @@ function openMenu(anchor, items) {
 
 function openNewMenu(anchor, date) {
   openMenu(anchor, [
+    { label: "New item (meeting, duty, reminder…)", run: function () { openEventEditor(null, { date: date || todayStr() }); } },
     { label: "New to-do", run: function () { openTodoEditor(null, { due: date || "" }); } },
-    { label: "New event", run: function () { openEventEditor(null, { date: date || todayStr() }); } }
+    { label: "New marking", run: function () { openMarkEditor(null, {}); } }
   ]);
 }
 
@@ -367,6 +368,12 @@ function boot(result) {
   App.ctx = L.prepare(result);
   App.arriving = true;
   route();
+  // An older Google web app doesn't know about marking, covered or follow-ups and would drop them.
+  if (!("marks" in result)) {
+    toast("The Google web app needs updating before Covered, Follow up and marking can be saved: paste the new Code.gs into Apps Script and deploy a new version.", true);
+    return;
+  }
+  maybeAskUndated();
 }
 
 function loadNotebook() {
