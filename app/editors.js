@@ -165,6 +165,9 @@ function openEventEditor(ev, defaults) {
   var repeat = el("select", { class: "select", style: "max-width:320px" });
   var until = el("input", { class: "input", type: "date", value: base.until || "", style: "max-width:200px" });
   var notes = textArea(base.notes, 2);
+  var remind = el("select", { class: "select", style: "max-width:260px" }, [["", "No email reminder"], ["0", "At the start"], ["10", "10 minutes before"],
+    ["30", "30 minutes before"], ["60", "1 hour before"], ["1440", "1 day before"]].map(function (o) { return el("option", { value: o[0] }, o[1]); }));
+  remind.value = base.remindBefore === "" || base.remindBefore === undefined || base.remindBefore === null ? "" : String(base.remindBefore);
   var picks = periodPicks(start, end);
   var timeRow = el("div", {}, [el("div", { class: "row" }, [start, el("span", {}, "to"), end]), el("div", { class: "hint", style: "margin:10px 0 6px" }, "Or tap the periods it covers:"), picks.node]);
   var untilField = field("Repeat until", until, "· leave empty to repeat all year");
@@ -192,7 +195,7 @@ function openEventEditor(ev, defaults) {
       id: isNew ? "" : base.id, title: title.value, date: date.value,
       start: allDay.checked ? "" : start.value, end: allDay.checked ? "" : end.value,
       repeat: repeat.value, repeatOn: repeat.value === "cycle" ? info.cycleDay : "", until: repeat.value === "none" ? "" : until.value,
-      replaces: replaces.checked, notes: notes.value
+      replaces: replaces.checked, notes: notes.value, remindBefore: remind.value
     };
   }
   var initial = JSON.stringify(collect());
@@ -219,6 +222,7 @@ function openEventEditor(ev, defaults) {
     el("div", { class: "hint", style: "margin:0 0 16px 26px" }, "Those lessons show as replaced and won't count as not updated."),
     field("Repeat", repeat),
     untilField,
+    field("Email reminder", remind, base.repeat !== "none" && !isNew ? "· before every repeat" : ""),
     field("Notes", notes)
   ];
   var footer = [
@@ -266,6 +270,14 @@ function periodPicks(start, end) {
   return { node: el("div", { class: "period-picks" }, buttons) };
 }
 
+// A first guess for "Email me a reminder": the due date at its time (or 07:30), else an hour from now.
+var DEFAULT_REMINDER_TIME = "07:30";
+function suggestedReminder(dueDate, dueTime) {
+  if (dueDate) return dueDate + "T" + (dueTime || DEFAULT_REMINDER_TIME);
+  var d = new Date(Date.now() + 60 * 60 * 1000);
+  return todayStr() + "T" + pad(d.getHours()) + ":00";
+}
+
 // ---------- to-do ----------
 function openTodoEditor(todo, defaults) {
   var isNew = !todo || !todo.id;
@@ -280,10 +292,11 @@ function openTodoEditor(todo, defaults) {
   cls.value = base.classId || "";
   var notes = textArea(base.notes, 3);
   var done = el("input", { type: "checkbox", checked: !!base.done });
+  var reminder = reminderField(base.remindAt, function () { return suggestedReminder(due.value, time.value); });
 
   function collect() {
     return { id: isNew ? "" : base.id, title: title.value, due: due.value, time: due.value ? time.value : "", classId: cls.value, notes: notes.value,
-      done: done.checked, doneAt: base.doneAt || "", category: category.value };
+      done: done.checked, doneAt: base.doneAt || "", category: category.value, remindAt: reminder.value() };
   }
   var initial = JSON.stringify(collect());
   guardDirty(function () { return JSON.stringify(collect()) !== initial; });
@@ -308,6 +321,7 @@ function openTodoEditor(todo, defaults) {
     field("Category", category, "· optional"),
     el("div", { class: "field" }, [el("span", { class: "label" }, "Due · optional"), el("div", { class: "row" }, [due, time]), quick]),
     field("Class", cls, "· optional"),
+    reminder.node,
     field("Notes", notes),
     isNew ? null : el("label", { class: "check" }, [done, "Done"])
   ];

@@ -97,6 +97,7 @@ function loadServer(options = {}) {
         const builder = {
           timeBased: () => builder, everyDays: (n) => { spec.everyDays = n; return builder; },
           everyHours: (n) => { spec.everyHours = n; return builder; },
+          everyMinutes: (n) => { spec.everyMinutes = n; return builder; },
           atHour: (h) => { spec.hour = h; return builder; },
           create: () => { const t = Object.assign({ getHandlerFunction: () => handler }, spec); triggers.push(t); return t; }
         };

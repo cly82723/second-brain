@@ -1,69 +1,211 @@
-/* The evening round-up email. One hourly trigger (running as the owner) looks at every notebook
-   and emails each one whose chosen hour it is, to that notebook's own address (recipient_). */
+/* Email reminders. Two kinds, both sent to the notebook's own address (recipient_):
+   - Round-ups: as many as the teacher likes, each at its own time of day, covering today or tomorrow.
+   - Item reminders: a to-do or a marking pile at a set date and time; an item some minutes before
+     it starts (every repeat of a repeating item).
+   One trigger (running as the owner) visits every notebook every 15 minutes; anything due since the
+   last visit goes out, so a reminder arrives within about 15 minutes of its time, late rather than lost. */
 
 var DIGEST_HANDLER = "dailyDigest";
+var TRIGGER_MINUTES = 15;
+var TRIGGER_KIND_PROP = "REMINDER_TRIGGER";
+var TRIGGER_KIND = "every-15-minutes";
+var MAX_ROUNDUPS = 6;
+var REMIND_BEFORE = [0, 10, 30, 60, 1440];
+var STALE_REMINDER_MINUTES = 1440; // a reminder more than a day overdue (e.g. after downtime) is dropped, not sent
 var NO_ADDRESS = "There's no email address for this notebook yet. Ask the person who set up the app to add one.";
 
+function nowTime_() { return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "HH:mm"); }
+
+// ---------- round-ups ----------
+// The round-ups in force. Notebooks from before multiple round-ups had one evening email.
+function roundupsFrom_(settings) {
+  if (Array.isArray(settings.reminders)) return settings.reminders;
+  var e = settings.email;
+  if (e && e.on) return [{ id: "evening", time: (e.hour < 10 ? "0" : "") + e.hour + ":00", covers: "tomorrow", on: true, lastSent: e.lastSent || "" }];
+  return [];
+}
+
+function saveReminders(list) {
+  return respond_(function () {
+    return withLock_(function () { return { reminders: writeRoundups_(cleanRoundups_(list)) }; });
+  });
+}
+
+// Keeps when each was last sent, and a round-up whose time has already passed today counts as sent
+// today, so adding a 07:00 round-up at 14:00 doesn't fire one straight away.
+function writeRoundups_(clean) {
+  if (clean.some(function (r) { return r.on; }) && !recipient_()) throw new UserError_(NO_ADDRESS);
+  var previous = Object.create(null);
+  roundupsFrom_(readSettings_()).forEach(function (r) { previous[r.id] = r; });
+  var today = today_(), now = nowTime_();
+  var merged = clean.map(function (r) {
+    var p = previous[r.id];
+    var lastSent = p && p.time === r.time ? (p.lastSent || "") : (r.time <= now ? today : "");
+    return Object.assign({}, r, { lastSent: lastSent });
+  });
+  writeSetting_("reminders", merged);
+  syncDigestTrigger_();
+  return merged;
+}
+
+// The older single evening email, still understood: one round-up at that hour, for tomorrow.
 function saveEmail(request) {
   return respond_(function () {
     return withLock_(function () {
       var on = !!(request && request.on);
       var hour = Number(request && request.hour);
-      if (EMAIL_HOURS.indexOf(hour) < 0) throw new UserError_("Please pick a time between 4 pm and 11 pm.");
-      if (on && !recipient_()) throw new UserError_(NO_ADDRESS);
-      // Keeps the day it was last sent, so saving again after tonight's email doesn't send a second.
-      var previous = readSettings_().email || {};
-      var email = { on: on, hour: hour, lastSent: previous.lastSent || "" };
-      writeSetting_("email", email);
-      syncDigestTrigger_();
-      return { email: email };
+      if (!(hour >= 0 && hour <= 23 && Math.floor(hour) === hour)) throw new UserError_("Please pick an hour of the day.");
+      var time = (hour < 10 ? "0" : "") + hour + ":00";
+      var others = roundupsFrom_(readSettings_()).filter(function (r) { return r.id !== "evening"; });
+      var list = writeRoundups_(cleanRoundups_(others.concat(on ? [{ id: "evening", time: time, covers: "tomorrow", on: true }] : [])));
+      return { email: { on: on, hour: hour }, reminders: list };
     });
   });
 }
 
-// Exactly one hourly trigger while anyone has the email on; none otherwise.
+// ---------- the trigger ----------
+// One 15-minute trigger while anyone has a reminder; none otherwise.
 function syncDigestTrigger_() {
+  if (anyRemindersSet_()) ensureDigestTrigger_();
+  else {
+    removeDigestTriggers_();
+    PropertiesService.getScriptProperties().setProperty(TRIGGER_KIND_PROP, "");
+  }
+}
+
+// Cheap enough to call on every save that sets a reminder.
+function ensureDigestTrigger_() {
+  var props = PropertiesService.getScriptProperties();
+  var mine = ScriptApp.getProjectTriggers().filter(function (t) { return t.getHandlerFunction() === DIGEST_HANDLER; });
+  if (mine.length === 1 && props.getProperty(TRIGGER_KIND_PROP) === TRIGGER_KIND) return;
+  removeDigestTriggers_(); // e.g. the old hourly one
+  ScriptApp.newTrigger(DIGEST_HANDLER).timeBased().everyMinutes(TRIGGER_MINUTES).create();
+  props.setProperty(TRIGGER_KIND_PROP, TRIGGER_KIND);
+}
+
+function removeDigestTriggers_() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === DIGEST_HANDLER) ScriptApp.deleteTrigger(t);
   });
-  if (anyEmailOn_()) ScriptApp.newTrigger(DIGEST_HANDLER).timeBased().everyHours(1).create();
 }
 
-// A notebook that can't be read just now counts as on, so nobody's email is switched off by a hiccup.
-function anyEmailOn_() {
+function pendingItemReminder_(x) { return !x.done && x.remindAt && x.remindSent !== x.remindAt; }
+
+// A notebook that can't be read just now counts as having reminders, so nobody's are switched off by a hiccup.
+function anyRemindersSet_() {
   return notebooksWithData_().some(function (nb) {
     try {
-      return withNotebook_(nb, function () { var e = readSettings_().email; return !!(e && e.on); });
+      return withNotebook_(nb, function () {
+        return roundupsFrom_(readSettings_()).some(function (r) { return r.on; }) ||
+          readTab_("Todos").some(pendingItemReminder_) || readTab_("Marks").some(pendingItemReminder_) ||
+          readTab_("Events").some(function (ev) { return ev.remindBefore !== "" && ev.remindBefore !== null; });
+      });
     } catch (e) {
-      console.warn("Couldn't check the evening email setting for " + (nb.name || "the owner") + ": " + (e && e.message || e));
+      console.warn("Couldn't check the reminders for " + (nb.name || "the owner") + ": " + (e && e.message || e));
       return true;
     }
   });
 }
 
-// Run by the hourly trigger. Each notebook is dealt with once a day, at the first run on or after its
-// chosen hour (so a skipped trigger run only makes it later, never lost), and an email goes out only
-// when tomorrow has something on. One notebook failing doesn't stop the others.
+// ---------- every 15 minutes ----------
+// (Named dailyDigest for the triggers made by earlier versions.) One notebook failing doesn't stop the others.
 function dailyDigest() {
-  var hour = Number(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "HH:mm").slice(0, 2));
+  var now = nowTime_();
   notebooksWithData_().forEach(function (nb) {
     try {
-      withNotebook_(nb, function () { withLock_(function () { sendDigestIfDue_(hour); }); });
+      withNotebook_(nb, function () { withLock_(function () { sendDueReminders_(now); }); });
     } catch (e) {
-      console.error("Evening email for " + (nb.name || "the owner") + " failed: " + (e && e.stack ? e.stack : e));
+      console.error("Reminders for " + (nb.name || "the owner") + " failed: " + (e && e.stack ? e.stack : e));
     }
   });
 }
 
-function sendDigestIfDue_(hour) {
+function sendDueReminders_(now) {
+  if (!recipient_()) return;
   var settings = readSettings_();
-  var email = settings.email;
   var today = today_();
-  if (!email || !email.on || hour < Number(email.hour) || email.lastSent === today || !recipient_()) return;
-  var ctx = context_();
-  var digest = logic_().digest(ctx, today, settings.startDate || "");
-  if (digest) sendDigest_(ctx, digest);
-  writeSetting_("email", Object.assign({}, email, { lastSent: today }));
+  var ctx = null;
+  function context() { return ctx || (ctx = context_()); }
+  var list = roundupsFrom_(settings);
+  var changed = false;
+  list.forEach(function (r) {
+    if (!r.on || r.lastSent === today || now < r.time) return;
+    var digest = logic_().digest(context(), today, settings.startDate || "", r.covers === "today" ? today : logic_().addDays(today, 1));
+    if (digest) sendDigest_(context(), digest);
+    r.lastSent = today;
+    changed = true;
+  });
+  if (changed) writeSetting_("reminders", list);
+  sendItemReminders_(today, now, settings, context);
+}
+
+// "YYYY-MM-DDTHH:MM" moved back by some minutes.
+function stampMinus_(date, time, minutes) {
+  var L = logic_();
+  var total = L.minutes(time) - minutes;
+  var shift = Math.floor(total / 1440);
+  var m = total - shift * 1440;
+  return L.addDays(date, shift) + "T" + (m < 600 ? "0" : "") + Math.floor(m / 60) + ":" + (m % 60 < 10 ? "0" : "") + (m % 60);
+}
+
+// Everything whose reminder time has come, in one email.
+function sendItemReminders_(today, now, settings, context) {
+  var L = logic_();
+  var nowStamp = today + "T" + now;
+  var oldest = stampMinus_(today, now, STALE_REMINDER_MINUTES);
+  function due(x) { return pendingItemReminder_(x) && x.remindAt <= nowStamp && x.remindAt > oldest; }
+  var todos = readTab_("Todos").filter(due);
+  var marks = readTab_("Marks").filter(due);
+  var withBefore = readTab_("Events").filter(function (ev) { return ev.remindBefore !== "" && ev.remindBefore !== null; });
+  var sentLog = Object.assign({}, settings.eventReminders || {});
+  var events = [];
+  if (withBefore.length) {
+    var ids = Object.create(null);
+    withBefore.forEach(function (ev) { ids[ev.id] = true; });
+    // Today's and tomorrow's occurrences (a day-before reminder for tomorrow fires today).
+    [today, L.addDays(today, 1)].forEach(function (d) {
+      L.eventsOn(context(), d).forEach(function (ev) {
+        if (!ids[ev.id]) return;
+        var at = stampMinus_(d, ev.start || "07:00", Number(ev.remindBefore) || 0);
+        var key = ev.id + "|" + d;
+        if (at <= nowStamp && at > oldest && !sentLog[key]) events.push({ ev: ev, on: d, key: key });
+      });
+    });
+  }
+  if (!todos.length && !marks.length && !events.length) return;
+  sendItemsEmail_(context(), todos, marks, events);
+  todos.forEach(function (t) { upsert_("Todos", idKey_, Object.assign({}, t, { remindSent: t.remindAt })); });
+  marks.forEach(function (m) { upsert_("Marks", idKey_, Object.assign({}, m, { remindSent: m.remindAt })); });
+  if (events.length) {
+    events.forEach(function (x) { sentLog[x.key] = x.on; });
+    var keep = L.addDays(today, -2);
+    Object.keys(sentLog).forEach(function (k) { if (sentLog[k] < keep) delete sentLog[k]; });
+    writeSetting_("eventReminders", sentLog);
+  }
+}
+
+function sendItemsEmail_(ctx, todos, marks, events) {
+  var L = logic_();
+  var items = events.map(function (x) {
+    var when = (x.ev.allDay ? "All day" : x.ev.start + (x.ev.end ? "–" + x.ev.end : "")) + ", " + L.shortDate(x.on);
+    return { title: x.ev.title, meta: when, lines: x.ev.notes ? [["Notes", x.ev.notes]] : [] };
+  }).concat(todos.map(function (t) {
+    var cls = t.classId && ctx.classById[t.classId];
+    return { title: t.title, meta: ["To-do", t.due ? "due " + L.shortDate(t.due) + (t.time ? " " + t.time : "") : "", cls ? cls.name : ""].filter(Boolean).join(" · "),
+      lines: t.notes ? [["Notes", t.notes]] : [] };
+  })).concat(marks.map(function (m) {
+    var p = L.markProgress(m);
+    var cls = m.classId && ctx.classById[m.classId];
+    return { title: m.title, meta: ["Marking", cls ? cls.name : "", m.due ? "return by " + L.shortDate(m.due) : "", p.total ? p.marked + " of " + p.total + " marked" : ""].filter(Boolean).join(" · ") };
+  }));
+  var subject = items.length === 1 ? "Reminder: " + items[0].title : "Reminders: " + items.length + " things";
+  var section = section_(items.length === 1 ? "Reminder" : "Reminders", items);
+  var url = appUrl_();
+  MailApp.sendEmail({
+    to: recipient_(), subject: subject, name: APP_NAME,
+    htmlBody: emailHtml_(subject, "", [section], url, "Reminder", "You asked for this reminder in the app."),
+    body: [subject, section.text].concat(url ? ["Open the app: " + url] : []).join("\n\n")
+  });
 }
 
 function sendTestEmail() {
@@ -74,7 +216,7 @@ function sendTestEmail() {
     var digest = logic_().digest(ctx, today_(), readSettings_().startDate || "");
     if (!digest) {
       MailApp.sendEmail({ to: to, subject: APP_NAME + ": test email", name: APP_NAME,
-        body: "Your evening email works. Tomorrow has nothing on, so on a real evening like this one no email would be sent." });
+        body: "Your email reminders work. Tomorrow has nothing on, so a round-up for tomorrow wouldn't be sent today." });
     } else {
       sendDigest_(ctx, digest);
     }
@@ -104,7 +246,8 @@ function digestEmail_(ctx, d, url) {
   var L = logic_();
   var dayName = d.info.cycleDay ? " · " + L.cycleName(ctx.school, d.info.cycleDay) : "";
   var count = d.lessons.filter(function (l) { return !l.replacedBy; }).length;
-  var subject = "Tomorrow, " + L.shortDate(d.date) + dayName + ": " +
+  var when = d.isToday ? "Today" : "Tomorrow";
+  var subject = when + ", " + L.shortDate(d.date) + dayName + ": " +
     (count ? count + (count === 1 ? " lesson" : " lessons") : "no lessons");
   var sections = [
     section_("Still to update from today", d.leftToday.map(function (l) {
@@ -124,14 +267,14 @@ function digestEmail_(ctx, d, url) {
       return { title: m.title, meta: [cls ? cls.name : "", m.due < d.date ? "overdue, was due " + L.shortDate(m.due) : "",
         p.total ? p.marked + " of " + p.total + " marked" : ""].filter(Boolean).join(" · ") };
     })),
-    section_("To-dos due tomorrow", d.todosDue.map(function (t) { return { title: t.title, meta: t.time || "" }; })),
+    section_("To-dos due " + when.toLowerCase(), d.todosDue.map(function (t) { return { title: t.title, meta: t.time || "" }; })),
     section_("Overdue to-dos", d.overdue.map(function (t) { return { title: t.title, meta: "was due " + L.shortDate(t.due) }; }))
   ].filter(Boolean);
   var heading = L.longDate(d.date) + dayName;
   var labels = d.info.labels.map(function (l) { return l.text; }).join(" · ");
   return {
     subject: subject,
-    html: emailHtml_(heading, labels, sections, url),
+    html: emailHtml_(heading, labels, sections, url, when, "You set up this round-up in Settings → Email reminders. Change or remove it there at any time."),
     text: [heading, labels].concat(sections.map(function (s) { return s.text; }))
       .concat(url ? ["Open the app: " + url] : []).filter(Boolean).join("\n\n")
   };
@@ -169,13 +312,13 @@ function section_(title, items) {
   return { html: html, text: text };
 }
 
-function emailHtml_(heading, labels, sections, url) {
+function emailHtml_(heading, labels, sections, url, kind, footer) {
   return '<div style="background:#f6f1e7;padding:24px 12px"><div style="max-width:560px;margin:0 auto;background:#fffdf8;border:1px solid #e6dccb;border-radius:12px;padding:24px">' +
-    '<div style="font:600 12px Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7a6f5f">' + esc_(APP_NAME) + " · Tomorrow</div>" +
+    '<div style="font:600 12px Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#6a604f">' + esc_(APP_NAME) + " · " + esc_(kind || "Reminder") + "</div>" +
     '<h1 style="font:600 24px/1.25 Georgia,serif;color:#1f2a44;margin:6px 0 4px">' + esc_(heading) + "</h1>" +
     (labels ? '<div style="font:400 14px Arial,sans-serif;color:#7a6f5f">' + esc_(labels) + "</div>" : "") +
     sections.map(function (s) { return s.html; }).join("") +
     (url ? '<p style="margin:28px 0 0"><a href="' + esc_(url) + '" style="font:600 14px Arial,sans-serif;color:#fffdf8;background:#1f2a44;padding:10px 16px;border-radius:8px;text-decoration:none">Open the app</a></p>' : "") +
-    '<p style="font:400 12px Arial,sans-serif;color:#9a8f7f;margin:24px 0 0">You turned this email on in Settings. Turn it off there at any time.</p>' +
+    '<p style="font:400 12px Arial,sans-serif;color:#7a6f5f;margin:24px 0 0">' + esc_(footer || "You turned this email on in Settings. Turn it off there at any time.") + "</p>" +
     "</div></div>";
 }

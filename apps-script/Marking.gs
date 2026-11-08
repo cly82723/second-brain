@@ -50,7 +50,7 @@ function saveMark(mark) {
       if (!existing && readTab_("Marks").length >= LIMITS.marks) throw new UserError_("You've reached the limit of " + LIMITS.marks + " marking items. Delete some finished ones first.");
       // Which scoresheet column it was written to is the web app's own record, never the page's.
       if (existing) clean.sheetCol = existing.sheetCol || "";
-      return { mark: upsert_("Marks", idKey_, clean) };
+      return { mark: saveWithReminder_("Marks", clean, existing) };
     });
   });
 }

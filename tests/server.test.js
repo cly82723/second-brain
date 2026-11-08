@@ -172,7 +172,7 @@ test("the evening email covers tomorrow and is only sent when something is on", 
   const on = s.call("saveEmail", { on: true, hour: 20 });
   assert.strictEqual(on.ok, true);
   assert.strictEqual(s.triggers.length, 1);
-  assert.strictEqual(s.triggers[0].everyHours, 1);
+  assert.strictEqual(s.triggers[0].everyMinutes, 15);
   // The hourly trigger sends nothing before the chosen hour, then sends once it's 8 pm.
   s.ctx.dailyDigest();
   assert.strictEqual(s.sent.length, 0);

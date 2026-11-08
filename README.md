@@ -1,4 +1,4 @@
-# Teachers' Second Brain
+# Periods
 
 ### ▶ https://cly82723.github.io/second-brain/
 
@@ -29,7 +29,7 @@ Undated to-dos, homework and marking are asked about once a day when the app ope
 
 ## Setting up the web app (once)
 
-1. Go to <https://script.google.com> and make a **New project** called `Teachers' Second Brain`.
+1. Go to <https://script.google.com> and make a **New project** called `Periods`.
 2. **Project Settings** (gear icon) → tick **Show "appsscript.json" manifest file in editor**.
 3. Replace everything in `Code.gs` with [`apps-script/dist/Code.gs`](apps-script/dist/Code.gs), and
    everything in `appsscript.json` with [`apps-script/dist/appsscript.json`](apps-script/dist/appsscript.json). Save.
@@ -38,7 +38,7 @@ Undated to-dos, homework and marking are asked about once a day when the app ope
 5. **Deploy → New deployment →** Web app: **Execute as: Me**, **Who has access: Anyone**. Deploy.
 6. Copy the **Web app URL** into `WEB_APP_URL` in [`core/remote.js`](core/remote.js), then push.
 7. Open your personal link on each device (bookmark it or add it to the home screen).
-8. In the app: **Settings → Import a file** (the converted Word log), then **Evening email → Send me a test**.
+8. In the app: **Settings → Import a file** (the converted Word log), then **Email reminders**: add round-ups (e.g. 07:00 today, 20:00 tomorrow) and **Send me a test**. Reminders can also be set on any to-do, item or marking; one 15-minute trigger sends them (within about 15 minutes of the time).
 
 ## Updating
 

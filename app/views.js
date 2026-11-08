@@ -72,6 +72,12 @@ function dueText(due, today, time) {
   return el("span", { class: due < today ? "due-overdue" : "" }, (due < today ? "Overdue · " : "") + text + (time ? " " + time : ""));
 }
 
+// "Reminder Tue 10 Nov 07:30" while an email reminder is still to come.
+function reminderNote(x) {
+  if (!x.remindAt || x.done || x.remindSent === x.remindAt) return null;
+  return el("span", { class: "reminder-note" }, "Reminder " + L.shortDate(x.remindAt.slice(0, 10)) + " " + x.remindAt.slice(11, 16));
+}
+
 function categoryChip(id) {
   var c = id && App.ctx.categoryById[id];
   return c ? el("span", { class: "chip class-chip c-" + c.colour }, c.name) : null;
@@ -85,7 +91,7 @@ function todoItem(t) {
     el("button", { type: "button", class: "todo-main", onclick: function () { openTodoEditor(t); } }, [
       el("div", { class: "todo-title" }, t.title),
       el("div", { class: "todo-meta" }, [dueText(t.due, today, t.time) || el("span", { class: "hint" }, "No date"), categoryChip(t.category),
-        cls ? el("span", { class: "chip class-chip " + classColour(cls) }, cls.name) : null])
+        cls ? el("span", { class: "chip class-chip " + classColour(cls) }, cls.name) : null, reminderNote(t)])
     ])
   ]);
 }
@@ -148,7 +154,8 @@ function markRow(m) {
         m.due ? dueText(m.due, today) : el("span", { class: "hint" }, "No return date"),
         cls ? el("span", { class: "chip class-chip " + classColour(cls) }, cls.name) : null,
         p.missing.length ? el("span", { class: "due-overdue" }, p.missing.length + " missing") : null,
-        m.sheetCol ? el("span", { class: "hint" }, "In scoresheet col " + m.sheetCol) : null
+        m.sheetCol ? el("span", { class: "hint" }, "In scoresheet col " + m.sheetCol) : null,
+        reminderNote(m)
       ])
     ]),
     el("div", { class: "mark-side" }, p.total ? [el("span", { class: "hint" }, p.marked + "/" + p.total), progressBar(p)] : null)

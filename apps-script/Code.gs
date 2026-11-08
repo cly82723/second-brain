@@ -1,4 +1,4 @@
-/* Teachers' Second Brain: the web app the page (https://cly82723.github.io/second-brain/) talks to.
+/* Periods (a teacher's logbook): the web app the page (https://cly82723.github.io/second-brain/) talks to.
    Works like CLY English: deployed to run as its owner, open to anyone, no sign-in. Every request is a
    POST of {action, key, args} sent as text/plain (so the browser skips the CORS preflight Apps Script
    can't answer). The key is the secret code from the owner's personal link; without it, nothing is
@@ -7,7 +7,7 @@
    Other teachers can have their own notebook on the same deployment (addTeacher below): each gets
    their own secret link and their own Sheet, also in the owner's Drive. The key picks the notebook. */
 
-var APP_NAME = "Teachers' Second Brain";
+var APP_NAME = "Periods";
 var SITE_URL = "https://cly82723.github.io/second-brain/";
 var ACCESS_KEY_PROP = "ACCESS_KEY";
 var NOTEBOOKS_PROP = "NOTEBOOKS";
@@ -29,7 +29,7 @@ function actionFor_(name) {
     getAll: getAll, getDataSheetUrl: getDataSheetUrl, saveSetup: saveSetup, saveLog: saveLog,
     carryForward: carryForward, saveEvent: saveEvent, deleteEvent: deleteEvent, saveTodo: saveTodo,
     deleteTodo: deleteTodo, clearDoneTodos: clearDoneTodos, importData: importData,
-    saveEmail: saveEmail, sendTestEmail: sendTestEmail, saveCategories: saveCategories,
+    saveEmail: saveEmail, saveReminders: saveReminders, sendTestEmail: sendTestEmail, saveCategories: saveCategories,
     saveMark: saveMark, deleteMark: deleteMark, saveRoster: saveRoster,
     linkScoresheet: linkScoresheet, unlinkScoresheet: unlinkScoresheet,
     previewScoresheet: previewScoresheet, writeScoresheet: writeScoresheet
@@ -217,7 +217,8 @@ function allData_() {
       schoolId: schoolId,
       setupDone: !!settings.setupDone,
       startDate: settings.startDate || "",
-      email: settings.email || { on: false, hour: 20 }
+      email: settings.email || { on: false, hour: 20 },
+      reminders: roundupsFrom_(settings).map(function (r) { return { id: r.id, time: r.time, covers: r.covers, on: r.on }; })
     },
     school: buildSchool_(schoolId),
     periods: settings.periods || spec.periods,
@@ -232,6 +233,20 @@ function allData_() {
     // Which classes have a scoresheet linked (the file id stays on the server).
     scoresheets: Object.keys(settings.scoresheets || {}).reduce(function (o, k) { o[k] = true; return o; }, {})
   };
+}
+
+// Whether a to-do's or marking's reminder has gone out is the web app's own record: it carries over
+// only while the reminder time is unchanged, so moving the time sends it again.
+function saveWithReminder_(tab, clean, existing) {
+  if (existing && existing.remindAt === clean.remindAt) clean.remindSent = existing.remindSent || "";
+  if (pendingItemReminder_(clean)) requireAddress_();
+  var saved = upsert_(tab, idKey_, clean);
+  if (pendingItemReminder_(clean)) ensureDigestTrigger_();
+  return saved;
+}
+
+function requireAddress_() {
+  if (!recipient_()) throw new UserError_(NO_ADDRESS);
 }
 
 function categoryIdSet_() {
@@ -358,7 +373,10 @@ function saveEvent(ev) {
       var clean = cleanEvent_(ev, spec.cycleLength);
       var isNew = !findRow_("Events", idKey_, clean.id);
       if (isNew && readTab_("Events").length >= LIMITS.events) throw new UserError_("You've reached the limit of " + LIMITS.events + " events.");
-      return { event: upsert_("Events", idKey_, clean) };
+      if (clean.remindBefore !== "") requireAddress_();
+      var saved = upsert_("Events", idKey_, clean);
+      if (clean.remindBefore !== "") ensureDigestTrigger_();
+      return { event: saved };
     });
   });
 }
@@ -373,9 +391,9 @@ function saveTodo(todo) {
   return respond_(function () {
     return withLock_(function () {
       var clean = cleanTodo_(todo, classIdSet_(), today_(), categoryIdSet_());
-      var isNew = !findRow_("Todos", idKey_, clean.id);
-      if (isNew && readTab_("Todos").length >= LIMITS.todos) throw new UserError_("You've reached the limit of " + LIMITS.todos + " to-dos. Delete some finished ones first.");
-      return { todo: upsert_("Todos", idKey_, clean) };
+      var existing = readTab_("Todos").filter(function (t) { return t.id === clean.id; })[0];
+      if (!existing && readTab_("Todos").length >= LIMITS.todos) throw new UserError_("You've reached the limit of " + LIMITS.todos + " to-dos. Delete some finished ones first.");
+      return { todo: saveWithReminder_("Todos", clean, existing) };
     });
   });
 }

@@ -5,7 +5,7 @@
 function importData(payload) {
   return respond_(function () {
     return withLock_(function () {
-      if (!payload || typeof payload !== "object") throw new UserError_("That file doesn't look like a Teachers' Second Brain file.");
+      if (!payload || typeof payload !== "object") throw new UserError_("That file doesn't look like a Periods file.");
       var setup = payload.classes || payload.timetable ? importedSetup_(payload) : null;
       var classIds = Object.create(null);
       (setup ? setup.classes : readTab_("Classes")).forEach(function (c) { classIds[c.id] = true; });

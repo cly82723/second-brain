@@ -2,7 +2,7 @@
    The web app runs as its owner, so this is always the owner's Sheet; its ID is kept in the script's
    properties. The owner may look at the Sheet, but should change things in the app. */
 
-var DATA_FILE_NAME = "Teachers' Second Brain – my data (please edit in the app)";
+var DATA_FILE_NAME = "Periods – my data (please edit in the app)";
 var SHEET_ID_KEY = "dataSheetId";
 
 var TABS = {
@@ -17,22 +17,23 @@ var TABS = {
       "covered", "followUp", "followUpDone"]
   },
   Events: {
-    headers: ["Id", "Title", "Date", "Start", "End", "Repeat", "Repeat on", "Until", "Replaces lessons", "Notes"],
-    fields: ["id", "title", "date", "start", "end", "repeat", "repeatOn", "until", "replaces", "notes"]
+    headers: ["Id", "Title", "Date", "Start", "End", "Repeat", "Repeat on", "Until", "Replaces lessons", "Notes",
+      "Email reminder (minutes before)"],
+    fields: ["id", "title", "date", "start", "end", "repeat", "repeatOn", "until", "replaces", "notes", "remindBefore"]
   },
   Todos: {
-    headers: ["Id", "Title", "Due", "Time", "Class Id", "Notes", "Done", "Done on", "Category"],
-    fields: ["id", "title", "due", "time", "classId", "notes", "done", "doneAt", "category"]
+    headers: ["Id", "Title", "Due", "Time", "Class Id", "Notes", "Done", "Done on", "Category", "Email reminder at", "Reminder sent for"],
+    fields: ["id", "title", "due", "time", "classId", "notes", "done", "doneAt", "category", "remindAt", "remindSent"]
   },
   Marks: {
     headers: ["Id", "What", "Class Id", "Collected", "Return by", "Scripts", "Marked", "Notes", "Done", "Done on",
-      "From homework", "Students (app use)", "Scoresheet column"],
+      "From homework", "Students (app use)", "Scoresheet column", "Email reminder at", "Reminder sent for"],
     fields: ["id", "title", "classId", "collected", "due", "scripts", "marked", "notes", "done", "doneAt",
-      "homework", "students", "sheetCol"]
+      "homework", "students", "sheetCol", "remindAt", "remindSent"]
   },
   Students: { headers: ["Class Id", "No.", "Name"], fields: ["classId", "no", "name"] }
 };
-var NUMBER_FIELDS = { day: true, repeatOn: true, scripts: true, marked: true, no: true };
+var NUMBER_FIELDS = { day: true, repeatOn: true, scripts: true, marked: true, no: true, remindBefore: true };
 var BOOLEAN_FIELDS = { done: true, replaces: true, followUpDone: true };
 // Kept in one cell as JSON: {classNo: {s: "S"|"L"|"A"|"M"|"", m: true|false}}.
 var JSON_FIELDS = { students: true };

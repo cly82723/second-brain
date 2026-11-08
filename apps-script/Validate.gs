@@ -16,7 +16,39 @@ var DEFAULT_CATEGORIES = [
 var CLASS_COLOURS = ["sage", "sky", "apricot", "lilac", "rose", "butter", "teal", "clay"];
 var ID_PATTERN = /^[A-Za-z0-9_-]{2,48}$/;
 var PERIOD_ID_PATTERN = /^[A-Za-z0-9]{1,8}$/;
-var EMAIL_HOURS = [16, 17, 18, 19, 20, 21, 22, 23];
+var EMAIL_HOURS = [16, 17, 18, 19, 20, 21, 22, 23]; // the older evening-only setting's choices
+var DATETIME_PATTERN = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/;
+
+// "YYYY-MM-DDTHH:MM" or "".
+function optionalDateTime_(value, what) {
+  if (value === undefined || value === null || value === "") return "";
+  var m = typeof value === "string" && value.match(DATETIME_PATTERN);
+  if (!m || !logic_().isDate(m[1]) || !logic_().isTime(m[2])) throw new UserError_(what + " isn't a valid date and time.");
+  return value;
+}
+
+// Round-up emails: [{id, time, covers: "today"|"tomorrow", on}], at most MAX_ROUNDUPS.
+function cleanRoundups_(list) {
+  if (!Array.isArray(list)) throw new UserError_("The reminder list didn't arrive. Please try again.");
+  if (list.length > 6) throw new UserError_("You can have up to 6 round-up emails.");
+  var ids = Object.create(null);
+  return list.map(function (r) {
+    if (!r || typeof r !== "object") throw new UserError_("A reminder didn't arrive properly. Please try again.");
+    var time = optionalTime_(r.time, "The reminder time");
+    if (!time) throw new UserError_("Each round-up needs a time.");
+    var id = cleanId_(r.id) || newId_();
+    if (ids[id]) id = newId_();
+    ids[id] = true;
+    return { id: id, time: time, covers: r.covers === "today" ? "today" : "tomorrow", on: r.on !== false };
+  }).sort(function (a, b) { return a.time < b.time ? -1 : 1; });
+}
+
+function cleanRemindBefore_(value) {
+  if (value === undefined || value === null || value === "") return "";
+  var n = Number(value);
+  if ([0, 10, 30, 60, 1440].indexOf(n) < 0) throw new UserError_("Please choose when to be reminded.");
+  return n;
+}
 
 function UserError_(message) { this.message = message; }
 
@@ -205,7 +237,9 @@ function cleanMark_(m, classIds, today) {
     doneAt: done ? (optionalDate_(m.doneAt, "Done date") || today) : "",
     homework: homework,
     students: classId ? cleanHandIns_(m.students) : {},
-    sheetCol: "" // only ever set by the web app itself, after writing to a scoresheet
+    sheetCol: "", // only ever set by the web app itself, after writing to a scoresheet
+    remindAt: done ? "" : optionalDateTime_(m.remindAt, "The reminder"),
+    remindSent: "" // only ever set by the web app, when the reminder goes out
   };
 }
 
@@ -229,6 +263,7 @@ function cleanEvent_(ev, cycleLength) {
     title: requiredText_(ev.title, LIMITS.title, "Title"),
     date: date, start: start, end: end, repeat: repeat, repeatOn: repeatOn, until: until,
     replaces: !!ev.replaces,
+    remindBefore: cleanRemindBefore_(ev.remindBefore),
     notes: text_(ev.notes, LIMITS.text, "Notes")
   };
 }
@@ -249,6 +284,8 @@ function cleanTodo_(t, classIds, today, categoryIds) {
     notes: text_(t.notes, LIMITS.text, "Notes"),
     done: done,
     doneAt: done ? (optionalDate_(t.doneAt, "Done date") || today) : "",
-    category: category
+    category: category,
+    remindAt: done ? "" : optionalDateTime_(t.remindAt, "The reminder"),
+    remindSent: "" // only ever set by the web app, when the reminder goes out
   };
 }

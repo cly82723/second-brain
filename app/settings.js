@@ -265,29 +265,68 @@ function categoriesPanel() {
   ]);
 }
 
-// ---------- email ----------
+// ---------- email reminders ----------
+var MAX_ROUNDUPS = 6;
+
+// Round-up emails at any times of day, each covering today or tomorrow.
 function emailPanel() {
-  var email = App.data.settings.email;
-  var on = el("input", { type: "checkbox", checked: email.on });
-  var hour = el("select", { class: "select", style: "max-width:140px", "aria-label": "Send at" }, App.data.emailHours.map(function (h) {
-    return el("option", { value: String(h) }, (h > 12 ? h - 12 : h) + " pm");
-  }));
-  hour.value = String(email.hour);
-  var save = el("button", { type: "button", class: "btn btn-ink btn-sm" }, "Save");
+  var list = (App.data.settings.reminders || []).map(function (r) { return Object.assign({}, r); });
+  var holder = el("div", { class: "roundups" });
+  var save = el("button", { type: "button", class: "btn btn-ink btn-sm" }, "Save reminders");
+  var add = el("button", { type: "button", class: "btn btn-sm" }, "+ Add a round-up");
+  function draw() {
+    holder.replaceChildren.apply(holder, list.length ? list.map(function (r, i) {
+      var time = el("input", { class: "input", type: "time", value: r.time, "aria-label": "Send at", oninput: function (e) { list[i] = Object.assign({}, list[i], { time: e.target.value }); } });
+      var covers = el("select", { class: "select", "aria-label": "Covers", onchange: function (e) { list[i] = Object.assign({}, list[i], { covers: e.target.value }); } },
+        [el("option", { value: "today" }, "Today's round-up"), el("option", { value: "tomorrow" }, "Tomorrow's round-up")]);
+      covers.value = r.covers;
+      return el("div", { class: "roundup-row" }, [
+        time, covers,
+        el("button", { type: "button", class: "btn btn-quiet icon-btn", "aria-label": "Remove the " + r.time + " round-up", onclick: function () { list.splice(i, 1); draw(); } }, icon("close"))
+      ]);
+    }) : [el("p", { class: "empty" }, "No round-ups yet.")]);
+    add.disabled = list.length >= MAX_ROUNDUPS;
+  }
+  add.addEventListener("click", function () {
+    // A sensible next slot: the morning first, then the evening.
+    var has = list.map(function (r) { return r.time; });
+    var time = has.indexOf("07:00") < 0 ? "07:00" : has.indexOf("20:00") < 0 ? "20:00" : "12:30";
+    list.push({ id: "", time: time, covers: time < "12:00" ? "today" : "tomorrow", on: true });
+    draw();
+  });
   save.addEventListener("click", function () {
-    busy(save, api("saveEmail", { on: on.checked, hour: Number(hour.value) })).then(function (res) {
-      setData(Object.assign({}, App.data, { settings: Object.assign({}, App.data.settings, { email: res.email }) }));
-      toast(res.email.on ? "Evening email on." : "Evening email off.");
+    busy(save, api("saveReminders", list)).then(function (res) {
+      setData(Object.assign({}, App.data, { settings: Object.assign({}, App.data.settings, { reminders: res.reminders }) }));
+      toast(res.reminders.length ? "Reminders saved." : "Round-ups switched off.");
     }, fail);
   });
-  var test = el("button", { type: "button", class: "btn btn-sm" }, "Send me a test");
+  var test = el("button", { type: "button", class: "btn btn-sm btn-quiet" }, "Send me a test");
   test.addEventListener("click", function () {
     busy(test, api("sendTestEmail")).then(function (res) { toast("Sent to " + res.to + "."); }, fail);
   });
-  return panel("Evening email", null, [
-    el("p", { class: "hint", style: "margin-top:0" }, "The evening before each school day: tomorrow's lessons and plans, what to remind students, homework to collect, events and to-dos due, and anything left from today. Nothing is sent when tomorrow has nothing on."),
-    el("div", { class: "row" }, [el("label", { class: "check" }, [on, "Send it at"]), hour, save, test])
+  draw();
+  return panel("Email reminders", "to " + (App.data.email || "your email"), [
+    el("p", { class: "hint", style: "margin-top:0" }, "Round-ups list that day's lessons and plans, what to remind students, homework to collect, items, marking and to-dos. Add as many as you like, at any time (for example 07:00 for today and 20:00 for tomorrow). Nothing is sent on a day with nothing on."),
+    holder,
+    el("div", { class: "row", style: "margin-top:10px" }, [add, save, test]),
+    el("p", { class: "hint", style: "margin-bottom:0" }, "You can also set a reminder on any to-do, item or marking when you open it. Emails arrive within about 15 minutes of the time.")
   ]);
+}
+
+// "Email me a reminder" for a to-do or marking: a date and time, or none.
+function reminderField(value, suggest) {
+  var on = el("input", { type: "checkbox", checked: !!value });
+  var date = el("input", { class: "input", type: "date", value: value ? value.slice(0, 10) : "", "aria-label": "Reminder date" });
+  var time = el("input", { class: "input", type: "time", value: value ? value.slice(11, 16) : "", "aria-label": "Reminder time" });
+  var row = el("div", { class: "row reminder-when", hidden: !value }, [date, time]);
+  on.addEventListener("change", function () {
+    row.hidden = !on.checked;
+    if (on.checked && !date.value) { var s = suggest(); date.value = s.slice(0, 10); time.value = s.slice(11, 16); }
+  });
+  return {
+    node: el("div", { class: "field" }, [el("label", { class: "check" }, [on, "Email me a reminder"]), row]),
+    value: function () { return on.checked && date.value && time.value ? date.value + "T" + time.value : ""; }
+  };
 }
 
 // ---------- export ----------
@@ -336,8 +375,8 @@ function importPanel() {
 
 function importText(text) {
   var parsed;
-  try { parsed = JSON.parse(text); } catch (e) { toast("That isn't a Teachers' Second Brain file.", true); return; }
-  if (!parsed || parsed.format !== "teachers-second-brain") { toast("That isn't a Teachers' Second Brain file.", true); return; }
+  try { parsed = JSON.parse(text); } catch (e) { toast("That isn't a Periods file.", true); return; }
+  if (!parsed || parsed.format !== "teachers-second-brain") { toast("That isn't a Periods file.", true); return; }
   var summary = [
     parsed.classes ? parsed.classes.length + " classes and a timetable (replacing yours)" : "",
     parsed.log ? parsed.log.length + " logbook entries" : "",

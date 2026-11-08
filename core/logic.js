@@ -367,21 +367,23 @@ function logic_() {
   }
 
   // ---- evening email ----
-  // What to prepare for tomorrow, plus anything left over from today. Null when there's nothing on.
-  function digest(ctx, today, since) {
-    var tomorrow = addDays(today, 1);
-    var info = dayInfo(ctx.school, tomorrow);
-    var lessons = lessonsOn(ctx, tomorrow);
-    var events = eventsOn(ctx, tomorrow);
-    var due = todosDueOn(ctx, tomorrow);
-    var homework = homeworkDueOn(ctx, tomorrow);
-    var marks = marksDueOn(ctx, tomorrow);
+  // A round-up of one day (tomorrow unless told otherwise): its lessons, items, homework, marking and
+  // to-dos, plus what's overdue; for tomorrow also anything left un-updated today. Null when nothing's on.
+  function digest(ctx, today, since, forDate) {
+    var day = forDate || addDays(today, 1);
+    var isToday = day === today;
+    var info = dayInfo(ctx.school, day);
+    var lessons = lessonsOn(ctx, day);
+    var events = eventsOn(ctx, day);
+    var due = todosDueOn(ctx, day);
+    var homework = homeworkDueOn(ctx, day);
+    var marks = marksDueOn(ctx, day);
     if (!lessons.length && !events.length && !due.length && !homework.length && !marks.length) return null;
-    var leftToday = notUpdated(ctx, since, today, 24 * 60).filter(function (l) { return l.date === today; });
+    var leftToday = isToday ? [] : notUpdated(ctx, since, today, 24 * 60).filter(function (l) { return l.date === today; });
     return {
-      date: tomorrow, info: info, lessons: lessons, events: events, todosDue: due, homeworkDue: homework,
-      marksDue: marks, overdueMarks: openMarks(ctx).filter(function (m) { return m.due && m.due <= today; }),
-      overdue: openTodos(ctx).filter(function (t) { return t.due && t.due <= today; }),
+      date: day, isToday: isToday, info: info, lessons: lessons, events: events, todosDue: due, homeworkDue: homework,
+      marksDue: marks, overdueMarks: openMarks(ctx).filter(function (m) { return m.due && m.due < day; }),
+      overdue: openTodos(ctx).filter(function (t) { return t.due && t.due < day; }),
       leftToday: leftToday
     };
   }

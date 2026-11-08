@@ -17,6 +17,7 @@ function openMarkEditor(mark, defaults) {
   var scripts = el("input", { class: "input", type: "number", min: "0", max: "500", value: base.scripts === "" ? "" : String(base.scripts), style: "max-width:110px", "aria-label": "Number of scripts" });
   var marked = el("input", { class: "input", type: "number", min: "0", max: "500", value: base.marked === "" ? "" : String(base.marked), style: "max-width:110px", "aria-label": "Number marked" });
   var notes = textArea(base.notes, 2);
+  var reminder = reminderField(base.remindAt, function () { return suggestedReminder(due.value, ""); });
   var done = el("input", { type: "checkbox", checked: !!base.done });
   var listHolder = el("div");
   var sheetHolder = el("div");
@@ -90,7 +91,7 @@ function openMarkEditor(mark, defaults) {
   function collect() {
     return {
       id: isNew ? "" : base.id, title: title.value, classId: cls.value, collected: collected.value, due: due.value,
-      scripts: scripts.value, marked: marked.value, notes: notes.value, done: done.checked, doneAt: base.doneAt || "",
+      scripts: scripts.value, marked: marked.value, notes: notes.value, done: done.checked, doneAt: base.doneAt || "", remindAt: reminder.value(),
       homework: base.homework || "", students: students
     };
   }
@@ -131,6 +132,7 @@ function openMarkEditor(mark, defaults) {
     el("div", { class: "row" }, [field("Collected", collected), field("Return by", due, "· optional")]),
     quick,
     listHolder,
+    reminder.node,
     field("Notes", notes),
     el("label", { class: "check", style: "margin-bottom:16px" }, [done, "Finished and returned"]),
     sheetHolder
