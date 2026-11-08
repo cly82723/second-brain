@@ -265,7 +265,7 @@ function todaySide(viewed, lessonDay, groups) {
   out.push(panel("To mark", marks.length ? marks.length + " to do" : "", [
     marks.length ? el("ul", { class: "list" }, marks.slice(0, 5).map(markRow)) : el("p", { class: "empty" }, "Nothing to mark."),
     el("div", { class: "row", style: "margin-top:8px" }, [
-      el("button", { type: "button", class: "btn btn-sm", onclick: function () { openMarkEditor(null, {}); } }, "+ Marking"),
+      el("button", { type: "button", class: "btn btn-sm", onclick: function () { openMarkEditor(null, {}); } }, "New marking"),
       marks.length > 5 ? el("button", { type: "button", class: "btn btn-quiet btn-sm", onclick: function () { go("todos", "mark"); } }, "All " + marks.length + " →") : null
     ])
   ]));
@@ -295,6 +295,6 @@ function homeworkRow(h) {
     el("button", { type: "button", class: "btn btn-sm" + (existing ? " btn-quiet" : ""), onclick: function () {
       if (existing) openMarkEditor(existing);
       else openMarkEditor(null, { title: h.entry.homework, classId: h.entry.classId, collected: h.entry.homeworkDue, homework: ref });
-    } }, existing ? "Open marking" : "Collected → To mark")
+    } }, existing ? "Open marking" : "Add to marking")
   ]);
 }

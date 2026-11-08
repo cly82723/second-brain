@@ -70,7 +70,7 @@ function renderMarks() {
     overdue.length ? el("div", { class: "panel" }, el("ul", { class: "list" }, overdue.map(markRow))) : null,
     el("div", { class: "section-title" }, "To mark · " + rest.length),
     el("div", { class: "panel" }, rest.length ? el("ul", { class: "list" }, rest.map(markRow)) :
-      el("p", { class: "empty" }, "Nothing waiting. When homework is handed in, press “Collected → To mark” on it.")),
+      el("p", { class: "empty" }, "Nothing waiting. When homework is handed in, press “Add to marking” on it.")),
     done.length ? el("details", { style: "margin-top:24px" }, [
       el("summary", { class: "section-title", style: "cursor:pointer;margin:0 0 10px" }, "Finished · " + done.length),
       el("div", { class: "panel" }, el("ul", { class: "list" }, done.slice(0, 50).map(markRow)))
