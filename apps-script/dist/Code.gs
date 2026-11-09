@@ -78,7 +78,7 @@ function logic_() {
     (data.log || []).forEach(function (e) {
       logByKey[e.date + "|" + e.classId] = e;
       if (e.followUp && !e.followUpDone && classById[e.classId]) (followUpsByClass[e.classId] = followUpsByClass[e.classId] || []).push(e);
-      if (e.homework && e.homeworkDue && classById[e.classId]) (collectByKey[e.homeworkDue + "|" + e.classId] = collectByKey[e.homeworkDue + "|" + e.classId] || []).push(e);
+      if (e.homework && e.homeworkDue && !e.homeworkCollected && classById[e.classId]) (collectByKey[e.homeworkDue + "|" + e.classId] = collectByKey[e.homeworkDue + "|" + e.classId] || []).push(e);
     });
     Object.keys(followUpsByClass).forEach(function (k) { followUpsByClass[k].sort(function (a, b) { return a.date < b.date ? -1 : 1; }); });
     var categories = data.categories || [];
@@ -253,7 +253,7 @@ function logic_() {
 
   function homeworkDueOn(ctx, date) {
     return ctx.log
-      .filter(function (e) { return e.homework && e.homeworkDue === date && ctx.classById[e.classId]; })
+      .filter(function (e) { return e.homework && e.homeworkDue === date && !e.homeworkCollected && ctx.classById[e.classId]; })
       .map(function (e) { return { entry: e, cls: ctx.classById[e.classId] }; });
   }
 
@@ -871,6 +871,7 @@ function cleanLogEntry_(e, classIds) {
   var date = requiredDate_(e.date, "The lesson date");
   if (!classIds[e.classId]) throw new UserError_("That class isn't in your timetable any more. Please reload the page.");
   var followUp = text_(e.followUp, LIMITS.text, "Follow up");
+  var homework = text_(e.homework, LIMITS.text, "Homework");
   return {
     date: date,
     classId: e.classId,
@@ -879,8 +880,9 @@ function cleanLogEntry_(e, classIds) {
     followUp: followUp,
     followUpDone: !!followUp && !!e.followUpDone,
     remind: text_(e.remind, LIMITS.text, "Remind students"),
-    homework: text_(e.homework, LIMITS.text, "Homework"),
+    homework: homework,
     homeworkDue: optionalDate_(e.homeworkDue, "Homework due date"),
+    homeworkCollected: !!homework && !!e.homeworkCollected,
     notes: text_(e.notes, LIMITS.text, "Notes"),
     done: !!e.done
   };
@@ -1025,9 +1027,9 @@ var TABS = {
   // New columns go on the end, so Sheets made by older versions keep working (see syncHeaders_).
   Log: {
     headers: ["Date", "Class Id", "Plan", "Remind students", "Homework", "Homework due", "Notes", "Done", "Updated",
-      "Covered", "Follow up next lesson", "Follow-up done"],
+      "Covered", "Follow up next lesson", "Follow-up done", "Homework collected"],
     fields: ["date", "classId", "plan", "remind", "homework", "homeworkDue", "notes", "done", "updated",
-      "covered", "followUp", "followUpDone"]
+      "covered", "followUp", "followUpDone", "homeworkCollected"]
   },
   Events: {
     headers: ["Id", "Title", "Date", "Start", "End", "Repeat", "Repeat on", "Until", "Replaces lessons", "Notes",
@@ -1047,7 +1049,7 @@ var TABS = {
   Students: { headers: ["Class Id", "No.", "Name"], fields: ["classId", "no", "name"] }
 };
 var NUMBER_FIELDS = { day: true, repeatOn: true, scripts: true, marked: true, no: true, remindBefore: true };
-var BOOLEAN_FIELDS = { done: true, replaces: true, followUpDone: true };
+var BOOLEAN_FIELDS = { done: true, replaces: true, followUpDone: true, homeworkCollected: true };
 // Kept in one cell as JSON: {classNo: {s: "S"|"L"|"A"|"M"|"", m: true|false}}.
 var JSON_FIELDS = { students: true };
 

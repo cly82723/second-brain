@@ -12,9 +12,9 @@ var TABS = {
   // New columns go on the end, so Sheets made by older versions keep working (see syncHeaders_).
   Log: {
     headers: ["Date", "Class Id", "Plan", "Remind students", "Homework", "Homework due", "Notes", "Done", "Updated",
-      "Covered", "Follow up next lesson", "Follow-up done"],
+      "Covered", "Follow up next lesson", "Follow-up done", "Homework collected"],
     fields: ["date", "classId", "plan", "remind", "homework", "homeworkDue", "notes", "done", "updated",
-      "covered", "followUp", "followUpDone"]
+      "covered", "followUp", "followUpDone", "homeworkCollected"]
   },
   Events: {
     headers: ["Id", "Title", "Date", "Start", "End", "Repeat", "Repeat on", "Until", "Replaces lessons", "Notes",
@@ -34,7 +34,7 @@ var TABS = {
   Students: { headers: ["Class Id", "No.", "Name"], fields: ["classId", "no", "name"] }
 };
 var NUMBER_FIELDS = { day: true, repeatOn: true, scripts: true, marked: true, no: true, remindBefore: true };
-var BOOLEAN_FIELDS = { done: true, replaces: true, followUpDone: true };
+var BOOLEAN_FIELDS = { done: true, replaces: true, followUpDone: true, homeworkCollected: true };
 // Kept in one cell as JSON: {classNo: {s: "S"|"L"|"A"|"M"|"", m: true|false}}.
 var JSON_FIELDS = { students: true };
 

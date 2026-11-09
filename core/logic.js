@@ -65,7 +65,7 @@ function logic_() {
     (data.log || []).forEach(function (e) {
       logByKey[e.date + "|" + e.classId] = e;
       if (e.followUp && !e.followUpDone && classById[e.classId]) (followUpsByClass[e.classId] = followUpsByClass[e.classId] || []).push(e);
-      if (e.homework && e.homeworkDue && classById[e.classId]) (collectByKey[e.homeworkDue + "|" + e.classId] = collectByKey[e.homeworkDue + "|" + e.classId] || []).push(e);
+      if (e.homework && e.homeworkDue && !e.homeworkCollected && classById[e.classId]) (collectByKey[e.homeworkDue + "|" + e.classId] = collectByKey[e.homeworkDue + "|" + e.classId] || []).push(e);
     });
     Object.keys(followUpsByClass).forEach(function (k) { followUpsByClass[k].sort(function (a, b) { return a.date < b.date ? -1 : 1; }); });
     var categories = data.categories || [];
@@ -240,7 +240,7 @@ function logic_() {
 
   function homeworkDueOn(ctx, date) {
     return ctx.log
-      .filter(function (e) { return e.homework && e.homeworkDue === date && ctx.classById[e.classId]; })
+      .filter(function (e) { return e.homework && e.homeworkDue === date && !e.homeworkCollected && ctx.classById[e.classId]; })
       .map(function (e) { return { entry: e, cls: ctx.classById[e.classId] }; });
   }
 

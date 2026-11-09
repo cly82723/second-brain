@@ -571,6 +571,9 @@ details.panel[open] > summary::before { transform: rotate(45deg); }
 .names-head .spacer { flex: 1; }
 .hw-row { display: flex; align-items: center; gap: 8px; }
 .hw-row .link-row { flex: 1; min-width: 0; }
+.collect-tick { width: 19px; height: 19px; margin: 0 2px; accent-color: var(--ok); flex: none; cursor: pointer; transition: transform var(--press) ease-out; }
+.collect-tick:active { transform: scale(.88); }
+@media (pointer: coarse) { .collect-tick { width: 22px; height: 22px; margin: 11px 0; } }
 
 /* ---------- undated prompt ---------- */
 .panel-attn { border-color: rgba(208, 138, 46, .45); background: linear-gradient(var(--warn-bg), var(--sheet) 70px); }

@@ -151,6 +151,7 @@ function cleanLogEntry_(e, classIds) {
   var date = requiredDate_(e.date, "The lesson date");
   if (!classIds[e.classId]) throw new UserError_("That class isn't in your timetable any more. Please reload the page.");
   var followUp = text_(e.followUp, LIMITS.text, "Follow up");
+  var homework = text_(e.homework, LIMITS.text, "Homework");
   return {
     date: date,
     classId: e.classId,
@@ -159,8 +160,9 @@ function cleanLogEntry_(e, classIds) {
     followUp: followUp,
     followUpDone: !!followUp && !!e.followUpDone,
     remind: text_(e.remind, LIMITS.text, "Remind students"),
-    homework: text_(e.homework, LIMITS.text, "Homework"),
+    homework: homework,
     homeworkDue: optionalDate_(e.homeworkDue, "Homework due date"),
+    homeworkCollected: !!homework && !!e.homeworkCollected,
     notes: text_(e.notes, LIMITS.text, "Notes"),
     done: !!e.done
   };

@@ -289,6 +289,7 @@ function homeworkRow(h) {
   var ref = h.entry.date + "|" + h.entry.classId;
   var existing = App.ctx.marks.filter(function (m) { return m.homework === ref; })[0];
   return el("li", { class: "hw-row" }, [
+    collectedTick(h.entry),
     el("button", { type: "button", class: "link-row " + classColour(h.cls), onclick: function () { openLessonEditor(h.entry.date, h.entry.classId); } }, [
       el("span", { class: "dot" }), el("span", {}, [el("span", { class: "link-title" }, h.cls.name + ": " + h.entry.homework), el("div", { class: "hint" }, "Set " + L.shortDate(h.entry.date))])
     ]),
@@ -297,4 +298,19 @@ function homeworkRow(h) {
       else openMarkEditor(null, { title: h.entry.homework, classId: h.entry.classId, collected: h.entry.homeworkDue, homework: ref });
     } }, existing ? "Open marking" : "Add to marking")
   ]);
+}
+
+// Tick homework off once it's in: it leaves "Homework due" and the lesson's "Collect" line.
+function collectedTick(entry) {
+  var cls = App.ctx.classById[entry.classId];
+  var tick = el("input", { type: "checkbox", class: "collect-tick", "aria-label": "Collected: " + (cls ? cls.name + ": " : "") + entry.homework });
+  tick.addEventListener("change", function () {
+    tick.disabled = true;
+    api("saveLog", Object.assign({}, entry, { homeworkCollected: true })).then(function (res) {
+      if (!res.entry.homeworkCollected) { tick.disabled = false; tick.checked = false; toast("Update the web app in Apps Script to tick off homework.", true); return; }
+      applyLog(res.entry, logKey(entry));
+      toast("Homework collected.");
+    }, function (err) { tick.disabled = false; tick.checked = false; fail(err); });
+  });
+  return tick;
 }

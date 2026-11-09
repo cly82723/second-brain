@@ -239,3 +239,20 @@ test("the evening email carries follow-ups, homework to collect, and marking due
   const body = s.sent[0].body;
   ["Follow up", "Finish text 2", "Collect", "Vocab WS", "MARKING DUE", "Dictation"].forEach(t => assert.ok(body.includes(t), t));
 });
+
+test("ticking homework as collected takes it off the collect lists, and editing it brings it back", () => {
+  const s = loadServer({ now: THU_NOON });
+  setUp(s);
+  const L = s.ctx.logic_();
+  s.call("saveLog", { date: "2026-11-06", classId: "c-3d", homework: "Workbook p. 4", homeworkDue: "2026-11-10" });
+  let ctx = L.prepare(s.call("getAll").data);
+  assert.strictEqual(L.homeworkDueOn(ctx, "2026-11-10").length, 1);
+  const entry = s.call("getAll").data.log.find(x => x.date === "2026-11-06");
+  s.call("saveLog", Object.assign({}, entry, { homeworkCollected: true }));
+  ctx = L.prepare(s.call("getAll").data);
+  assert.strictEqual(L.homeworkDueOn(ctx, "2026-11-10").length, 0);
+  assert.strictEqual(L.collectFor(ctx, "2026-11-10", "c-3d").length, 0);
+  // Collected can't stick to an entry with no homework.
+  s.call("saveLog", { date: "2026-11-06", classId: "c-3d", plan: "x", homeworkCollected: true });
+  assert.strictEqual(s.call("getAll").data.log.find(x => x.date === "2026-11-06").homeworkCollected, false);
+});

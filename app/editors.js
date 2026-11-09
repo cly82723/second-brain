@@ -52,7 +52,10 @@ function openLessonEditor(date, classId) {
     return { date: date, classId: classId, plan: plan.value, covered: covered.value, followUp: followUp.value,
       // Rewriting a follow-up that was already ticked makes it a new one to do.
       followUpDone: !!e.followUpDone && followUp.value.trim() === (e.followUp || "").trim(),
-      remind: remind.value, homework: homework.value, homeworkDue: due.value, notes: notes.value, done: doneBox.checked };
+      remind: remind.value, homework: homework.value, homeworkDue: due.value,
+      // Changing the homework or its due date makes it something to collect again.
+      homeworkCollected: !!e.homeworkCollected && homework.value.trim() === (e.homework || "").trim() && due.value === (e.homeworkDue || ""),
+      notes: notes.value, done: doneBox.checked };
   }
   var initial = JSON.stringify(collect());
   guardDirty(function () { return JSON.stringify(collect()) !== initial; });
@@ -115,7 +118,7 @@ function carriedBox(lesson) {
     });
     return el("li", { class: "carry-row" }, [el("label", { class: "check" }, [tick, el("span", {}, [el("b", {}, "Follow up "), "(from " + L.shortDate(f.date) + "): " + f.followUp])])]);
   }).concat(lesson.collect.map(function (h) {
-    return el("li", { class: "carry-row" }, [el("b", {}, "Collect: "), h.homework + " (set " + L.shortDate(h.date) + ")"]);
+    return el("li", { class: "carry-row" }, el("label", { class: "check" }, [collectedTick(h), el("span", {}, [el("b", {}, "Collect: "), h.homework + " (set " + L.shortDate(h.date) + ")"])]));
   })).concat(lesson.chase.map(function (c) {
     return el("li", { class: "carry-row" }, el("button", { type: "button", class: "link-row", onclick: function () { openMarkEditor(c.mark); } },
       [el("b", {}, "Chase: "), c.mark.title + " · " + c.names.join(", ")]));
