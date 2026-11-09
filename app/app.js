@@ -256,7 +256,7 @@ function openDrawer(title, subtitle, body, footer, classes) {
   Spring.run(sheet.state, 0, 0.36, 1, sheet.place);
   if (phone) enableSheetDrag(sheet, [grabber, head]);
 
-  var first = drawer.querySelector("[data-autofocus]") || drawer.querySelector("input, textarea, select") || closeBtn;
+  var first = drawer.querySelector("[data-autofocus]") || drawer.querySelector("input:not([type=date]):not([type=time]), textarea, select") || closeBtn;
   // On a phone, don't pop the keyboard over a sheet that's still sliding up.
   if (!phone) first.focus({ preventScroll: true }); else drawer.focus({ preventScroll: true });
   return drawer;

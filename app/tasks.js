@@ -83,11 +83,17 @@ function undatedRows(after) {
   var u = L.undated(App.ctx);
   var today = todayStr();
   function picker(label, onPick) {
+    // Nothing saves until "Set" is pressed: phone date wheels and typed dates fire
+    // "change" while the user is still choosing, which used to save the first date seen.
     var input = el("input", { class: "input input-sm", type: "date", "aria-label": "Date for " + label });
-    input.addEventListener("change", function () { if (input.value) onPick(input.value, input); });
+    var set = el("button", { type: "button", class: "btn btn-sm btn-ink", disabled: true, onclick: function (e) { if (input.value) onPick(input.value, e.currentTarget); } }, "Set");
+    function sync() { set.disabled = !input.value; }
+    input.addEventListener("input", sync);
+    input.addEventListener("change", sync);
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter" && input.value) { e.preventDefault(); onPick(input.value, set); } });
     return el("div", { class: "row", style: "gap:6px" }, [
       el("button", { type: "button", class: "btn btn-sm", onclick: function (e) { onPick(L.addDays(today, 1), e.currentTarget); } }, "Tomorrow"),
-      input
+      input, set
     ]);
   }
   function settle(promise, apply, what, node) {
